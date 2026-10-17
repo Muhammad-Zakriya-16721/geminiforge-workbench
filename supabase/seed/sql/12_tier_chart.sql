@@ -1,0 +1,2 @@
+insert into public.tier_chart (position, tier, overhead_gb, model_gb)
+select position, tier, overhead_gb, model_gb from jsonb_populate_recordset(null::public.tier_chart, $j$[{"position":1,"tier":"Tier E (4GB)","overhead_gb":0.12,"model_gb":0},{"position":2,"tier":"Tier C (8GB)","overhead_gb":0.35,"model_gb":4.5},{"position":3,"tier":"Tier B (16GB)","overhead_gb":0.55,"model_gb":10.5},{"position":4,"tier":"Tier A (32-64GB)","overhead_gb":0.85,"model_gb":28},{"position":5,"tier":"Tier S (192GB+)","overhead_gb":1.2,"model_gb":160}]$j$::jsonb);

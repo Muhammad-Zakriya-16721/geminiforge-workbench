@@ -12,11 +12,14 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const pluralWord = (w: string) => (/[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : /(ch|sh|s|x)$/.test(w) ? w + "es" : w + "s");
 const plural = (n: number, w: string) => { const p = w.split(" "); const last = p.pop() as string; return `${n} ${[...p, n === 1 ? last : pluralWord(last)].join(" ")}`; };
 
-const CRATE_ALIASES: { id: string; aliases: string[] }[] = CRATES_LIST.map((c) => {
+const buildAliases = (): { id: string; aliases: string[] }[] => CRATES_LIST.map((c) => {
   const tail = c.name.split("/").pop() ?? c.name;
   const aliases = tail.includes(",") ? ["forge-worker", "gf-tmux-shim", "gf-emergency-hud"] : tail === "geminiforge-daemon" ? ["geminiforge-daemon", "the daemon"] : [tail, tail.replace(/-/g, " ")];
   return { id: c.name, aliases };
 });
+let CRATE_ALIASES = buildAliases();
+// Called when the documentation content changes: rebuilds everything the engine derived from it.
+export function resetEngine() { CRATE_ALIASES = buildAliases(); PASSAGES = null; IDF = new Map(); AVG = 1; CORPUS = ""; }
 
 function findEntities(q: string): Ent[] {
   const out: Ent[] = [];
@@ -26,7 +29,7 @@ function findEntities(q: string): Ent[] {
   for (const m of q.matchAll(/\bconfirm(?:ation)?s?[-\s#]*0*(\d)\b/g)) add("confirm", `CONFIRM-0${m[1]}`);
   for (const m of q.matchAll(/\b(?:patch\s*)?f\.\s*([1-6])\b|\bpatch\s*f?\s*\.?\s*([1-6])\b/g)) add("patch", `Patch F.${m[1] ?? m[2]}`);
   for (const m of q.matchAll(/\bspikes?[-\s#]*0*(\d)\b/g)) add("spike", `SPIKE-0${m[1]}`);
-  for (const m of q.matchAll(/\bch(?:apter)?\.?\s*0*([1-7])\b/g)) add("chapter", CHAPTERS[Number(m[1]) - 1].id);
+  for (const m of q.matchAll(/\bch(?:apter)?\.?\s*0*(\d{1,2})\b/g)) { const c = CHAPTERS[Number(m[1]) - 1]; if (c) add("chapter", c.id); }
   for (const m of q.matchAll(/\btier[\s-]+([ecbas])\b/g)) add("tier", m[1].toUpperCase());
   for (const m of q.matchAll(/\bgf-t\d+-\d+\b/g)) { const t = INITIAL_TASKS.find((x) => x.taskId.toLowerCase() === m[0]); if (t) add("task", t.taskId); }
   for (const a of INITIAL_ROSTER) {

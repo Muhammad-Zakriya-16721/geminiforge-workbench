@@ -1,0 +1,2 @@
+insert into public.pss_chart (position, name, s1, s10)
+select position, name, s1, s10 from jsonb_populate_recordset(null::public.pss_chart, $j$[{"position":1,"name":"GeminiForge (Rust)","s1":28,"s10":65},{"position":2,"name":"jcode (Rust baseline)","s1":27.8,"s10":167},{"position":3,"name":"Goose (Rust/Go)","s1":42,"s10":310},{"position":4,"name":"Codex / Claude ACP","s1":180,"s10":1250},{"position":5,"name":"Paperclip (Node/PG)","s1":320,"s10":2200},{"position":6,"name":"Standard Electron","s1":450,"s10":3200}]$j$::jsonb);

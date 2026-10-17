@@ -34,13 +34,13 @@ interface Persisted {
 
 const STORE_KEY = "geminiforge_v21";
 const STORE_VERSION = 1;
-const CHAPTER_IDS: ChapterId[] = ["overview", "planes", "governor", "swarm", "packs", "prompts", "patches"];
+const chapterIds = (): ChapterId[] => CHAPTERS.map((c) => c.id);
 const isStr = (x: unknown): x is string => typeof x === "string";
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 
 function sanitizeView(v: unknown): View {
-  if (isObj(v) && v.kind === "chapter" && isStr(v.id) && CHAPTER_IDS.includes(v.id as ChapterId)) return { kind: "chapter", id: v.id as ChapterId };
+  if (isObj(v) && v.kind === "chapter" && isStr(v.id) && chapterIds().includes(v.id as ChapterId)) return { kind: "chapter", id: v.id as ChapterId };
   if (isObj(v) && v.kind === "thread" && isStr(v.id)) return { kind: "thread", id: v.id };
   if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit")) return { kind: v.kind };
   return { kind: "home" };
@@ -142,7 +142,7 @@ export function parseHash(h: string): { view: View | null; pane: PaneRef | null 
     if (i > 0 && ["crate", "pack", "prompt", "confirm", "patch", "spike", "os", "lab"].includes(kind)) pane = { kind, id: p.slice(i + 1) };
   }
   let view: View | null = null;
-  if (seg[0] === "chapter" && seg[1] && CHAPTER_IDS.includes(seg[1] as ChapterId)) view = { kind: "chapter", id: seg[1] as ChapterId, sec: seg[2] };
+  if (seg[0] === "chapter" && seg[1] && chapterIds().includes(seg[1] as ChapterId)) view = { kind: "chapter", id: seg[1] as ChapterId, sec: seg[2] };
   else if (seg[0] === "thread" && seg[1]) view = { kind: "thread", id: seg[1] };
   else if (seg[0] === "library") view = { kind: "library" };
   else if (seg[0] === "tracker") view = { kind: "tracker" };
@@ -174,6 +174,12 @@ interface Store extends Persisted {
   saveFail: boolean;
   printing: boolean;
   smartState: "off" | "loading" | "ready" | "failed";
+  contentRev: number;
+  contentSource: "built-in" | "saved copy" | "live";
+  contentVersion: number;
+  contentAt: number;
+  contentMsg: string;
+  contentBusy: boolean;
   cloudState: "off" | "signedout" | "syncing" | "synced" | "error";
   cloudEmail: string;
   cloudAt: number;
@@ -233,6 +239,12 @@ export const useStore = create<Store>((set, get) => ({
   saveFail: false,
   printing: false,
   smartState: "off",
+  contentRev: 0,
+  contentSource: "built-in",
+  contentVersion: 0,
+  contentAt: 0,
+  contentMsg: "",
+  contentBusy: false,
   cloudState: "off",
   cloudEmail: "",
   cloudAt: 0,

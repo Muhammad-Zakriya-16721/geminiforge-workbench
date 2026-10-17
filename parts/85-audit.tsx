@@ -33,9 +33,9 @@ export function AuditView() {
       <h2 className="set-h" style={{ marginTop: 28 }}>Confirmed</h2>
       <ul className="rn">{CLAIMS_CONFIRMED.map((c) => <li key={c}>{c}</li>)}</ul>
       <h2 className="set-h">Outdated version pins</h2>
-      <p className="meta">{CLAIMS_OUTDATED}</p>
+      <p className="meta">{CLAIMS_TEXT.outdated}</p>
       <h2 className="set-h">Not checked</h2>
-      <p className="meta">{CLAIMS_UNCHECKED}</p>
+      <p className="meta">{CLAIMS_TEXT.unchecked}</p>
     </div>
   );
 }

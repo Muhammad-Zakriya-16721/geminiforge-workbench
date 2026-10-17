@@ -49,18 +49,18 @@ export function paneContent(ref: PaneRef): PaneContent | null {
 export interface IndexItem { key: string; group: string; title: string; sub: string; badge?: string; ref?: PaneRef; view?: View; kw: string }
 
 export const GROUPS: { id: string; label: string; desc: string }[] = [
-  { id: "chapter", label: "Chapters", desc: "Open one of the 7 chapters" },
+  { id: "chapter", label: "Chapters", get desc() { return `Open one of the ${CHAPTERS.length} chapters`; } },
   { id: "crate", label: "Crates", desc: "Rust crates and binaries" },
-  { id: "pack", label: "Packs", desc: "25 on-demand ForgeHub packs" },
-  { id: "prompt", label: "Prompts", desc: "14 deep research briefs" },
-  { id: "confirm", label: "Confirmations", desc: "8 locked decisions" },
+  { id: "pack", label: "Packs", get desc() { return `${FORGEHUB_PACKS.length} on-demand ForgeHub packs`; } },
+  { id: "prompt", label: "Prompts", get desc() { return `${DEEP_PROMPTS.length} deep research briefs`; } },
+  { id: "confirm", label: "Confirmations", get desc() { return `${LOCKED_CONFIRMATIONS.length} locked decisions`; } },
   { id: "patch", label: "Patches", desc: "Drop-in specification patches" },
   { id: "spike", label: "Spikes", desc: "Phase 0 prototype experiments" },
   { id: "lab", label: "Labs", desc: "Interactive simulators" },
   { id: "os", label: "OS matrix", desc: "Six-target parity matrix" }
 ];
 
-export const INDEX: IndexItem[] = (() => {
+const buildIndex = (): IndexItem[] => {
   const items: IndexItem[] = [];
   CHAPTERS.forEach((c) => items.push({ key: `chapter:${c.id}`, group: "chapter", title: `${c.num} ${c.title}`, sub: c.subtitle, badge: "Chapter", view: { kind: "chapter", id: c.id }, kw: `${c.title} ${c.subtitle} chapter ${c.num}`.toLowerCase() }));
   const add = (ref: PaneRef, group: string, badge: string, extra: string) => {
@@ -79,7 +79,9 @@ export const INDEX: IndexItem[] = (() => {
   add({ kind: "lab", id: "ring0" }, "lab", "Lab", "ring-0 sanction gate istrusted click approval demo");
   add({ kind: "os", id: "matrix" }, "os", "Matrix", "linux windows macos mint ubuntu wayland x11 parity");
   return items;
-})();
+};
+export const INDEX: IndexItem[] = buildIndex();
+export const rebuildIndex = () => { INDEX.length = 0; INDEX.push(...buildIndex()); };
 
 export function searchIndex(q: string, group?: string): IndexItem[] {
   const parts = q.toLowerCase().split(/\s+/).filter(Boolean);

@@ -16,14 +16,18 @@ async function embedAll(texts: string[]): Promise<Float32Array[]> {
   return texts.map((_, i) => e.data.slice(i * d, (i + 1) * d));
 }
 
+export function resetSmart() { corpusVecs = null; loading = null; }
+
 export function loadSmart(): Promise<void> {
   if (embedder && corpusVecs) return Promise.resolve();
   if (loading) return loading;
   setSmart("loading", "Downloading the model (about 23 MB, once per session)…");
   loading = (async () => {
     try {
-      const tf = await import(/* @vite-ignore */ TF_URL);
-      embedder = (await tf.pipeline("feature-extraction", TF_MODEL, { dtype: "q8" })) as Embedder;
+      if (!embedder) {
+        const tf = await import(/* @vite-ignore */ TF_URL);
+        embedder = (await tf.pipeline("feature-extraction", TF_MODEL, { dtype: "q8" })) as Embedder;
+      }
       const ps = passages();
       const out: NonNullable<typeof corpusVecs> = [];
       for (let i = 0; i < ps.length; i += 24) {
@@ -36,7 +40,7 @@ export function loadSmart(): Promise<void> {
       corpusVecs = out;
       setSmart("ready", `Ready (${ps.length} passages indexed)`);
     } catch (err) {
-      embedder = null; corpusVecs = null; loading = null;
+      corpusVecs = null; loading = null;
       setSmart("failed", err instanceof Error ? err.message.slice(0, 160) : "Could not load the model");
     }
   })();

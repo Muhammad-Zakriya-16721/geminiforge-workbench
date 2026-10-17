@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 // #region 1. TYPES
-export type ChapterId = "overview" | "planes" | "governor" | "swarm" | "packs" | "prompts" | "patches";
+export type ChapterId = string;
 export type PaneKind = "crate" | "pack" | "prompt" | "confirm" | "patch" | "spike" | "os" | "lab";
 export interface PaneRef { kind: PaneKind; id: string }
 export type View =
@@ -56,6 +56,6 @@ export type AnsBlock =
   | { t: "kv"; rows: [string, string][] }
   | { t: "code"; code: string; lang: "rust" | "sql" | "json" | "text" };
 export interface Answer { blocks: AnsBlock[]; sources: string[]; ctx?: string; status?: "exact" | "closest" | "none"; understood?: string }
-export interface ChapterMeta { id: ChapterId; num: string; title: string; subtitle: string; Icon: React.ElementType }
+export interface ChapterMeta { id: ChapterId; num: string; title: string; subtitle: string; icon: string; Icon: React.ElementType }
 export interface Section { id: string; num: string; title: string }
 // #endregion

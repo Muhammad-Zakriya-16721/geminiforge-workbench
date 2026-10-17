@@ -1,13 +1,15 @@
 // #region 3. CHAPTERS (prose as data, so it can be rendered, searched, exported and printed)
-export const CHAPTERS: ChapterMeta[] = [
-  { id: "overview", num: "01", title: "Executive Overview & Philosophy", subtitle: "What GeminiForge V20 is, why it exists, and how the 5 planes fit together", Icon: BookOpen },
-  { id: "planes", num: "02", title: "5 Planes, 14 Crates & 6-OS Parity", subtitle: "Clear guide to every Rust crate, kernel sandbox boundary, and OS target", Icon: Layers },
-  { id: "governor", num: "03", title: "Hardware Governor & Computer Use", subtitle: "Split-memory MoE sizing, 4 GB Tier E mode, and the sub-50ms CU router", Icon: Cpu },
-  { id: "swarm", num: "04", title: "Paperclip Org-Swarm & Junie Lite", subtitle: "Zero-token heartbeats (#3401 fix), atomic 409 checkouts, and two-speed routing", Icon: Network },
-  { id: "packs", num: "05", title: "25-Pack ForgeHub & Anti-Bloat Diet", subtitle: "On-demand .gfpack catalog and why we pruned 1.4 GB of duplicate dependencies", Icon: Box },
-  { id: "prompts", num: "06", title: "14 Deep Research Dispatch Prompts", subtitle: "Self-contained specification briefs for sequential 1-by-1 execution", Icon: FileText },
-  { id: "patches", num: "07", title: "8 Locked Confirms, Spikes & Patches", subtitle: "Accepted architectural decisions (CONFIRM-01–08) and F.1–F.6 drop-in code", Icon: ShieldCheck }
-];
+export const CHAPTER_ICONS: Record<string, React.ElementType> = { BookOpen, Layers, Cpu, Network, Box, FileText, ShieldCheck };
+export const chapterIcon = (name: string): React.ElementType => CHAPTER_ICONS[name] ?? BookOpen;
+export const CHAPTERS: ChapterMeta[] = ([
+  { id: "overview", num: "01", title: "Executive Overview & Philosophy", subtitle: "What GeminiForge V20 is, why it exists, and how the 5 planes fit together", icon: "BookOpen" },
+  { id: "planes", num: "02", title: "5 Planes, 14 Crates & 6-OS Parity", subtitle: "Clear guide to every Rust crate, kernel sandbox boundary, and OS target", icon: "Layers" },
+  { id: "governor", num: "03", title: "Hardware Governor & Computer Use", subtitle: "Split-memory MoE sizing, 4 GB Tier E mode, and the sub-50ms CU router", icon: "Cpu" },
+  { id: "swarm", num: "04", title: "Paperclip Org-Swarm & Junie Lite", subtitle: "Zero-token heartbeats (#3401 fix), atomic 409 checkouts, and two-speed routing", icon: "Network" },
+  { id: "packs", num: "05", title: "25-Pack ForgeHub & Anti-Bloat Diet", subtitle: "On-demand .gfpack catalog and why we pruned 1.4 GB of duplicate dependencies", icon: "Box" },
+  { id: "prompts", num: "06", title: "14 Deep Research Dispatch Prompts", subtitle: "Self-contained specification briefs for sequential 1-by-1 execution", icon: "FileText" },
+  { id: "patches", num: "07", title: "8 Locked Confirms, Spikes & Patches", subtitle: "Accepted architectural decisions (CONFIRM-01–08) and F.1–F.6 drop-in code", icon: "ShieldCheck" }
+] as Omit<ChapterMeta, "Icon">[]).map((c) => ({ ...c, Icon: chapterIcon(c.icon) }));
 
 const MOE_REF: PaneRef = { kind: "lab", id: "moe" };
 const SWARM_REF: PaneRef = { kind: "lab", id: "swarm" };
@@ -140,8 +142,8 @@ export const CHAPTER_BLOCKS: Record<ChapterId, Block[]> = {
 const stripMd = (s: string) => s.replace(/\*\*|`/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
 
 // Sections are derived from the blocks, so the outline can never disagree with the headings.
-export const CHAPTER_SECTIONS: Record<ChapterId, Section[]> = (() => {
-  const out = {} as Record<ChapterId, Section[]>;
+const buildSections = (): Record<ChapterId, Section[]> => {
+  const out: Record<ChapterId, Section[]> = {};
   (Object.keys(CHAPTER_BLOCKS) as ChapterId[]).forEach((cid) => {
     const secs: Section[] = [{ id: `sec-${cid}-top`, num: "1", title: "Overview" }];
     CHAPTER_BLOCKS[cid].forEach((b) => {
@@ -150,6 +152,8 @@ export const CHAPTER_SECTIONS: Record<ChapterId, Section[]> = (() => {
     out[cid] = secs;
   });
   return out;
-})();
+};
+export const CHAPTER_SECTIONS: Record<ChapterId, Section[]> = buildSections();
+export const rebuildSections = () => { Object.keys(CHAPTER_SECTIONS).forEach((k) => delete CHAPTER_SECTIONS[k]); Object.assign(CHAPTER_SECTIONS, buildSections()); };
 export { stripMd };
 // #endregion

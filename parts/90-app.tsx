@@ -25,11 +25,13 @@ function useActiveSection(scroller: React.RefObject<HTMLDivElement | null>, ids:
 
 // Test hook (only with ?gftest in the address): lets the test scripts call the answer engine directly.
 if (typeof window !== "undefined" && /[?&]gftest\b/.test(window.location.search)) {
-  (window as unknown as Record<string, unknown>).__gf = { answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
+  (window as unknown as Record<string, unknown>).__gf = { answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, contentSnapshot, validateBundle, applyContent, refreshContent, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
 }
 
+initContent();
+
 export default function App() {
-  const { view, pane, sidebarOpen, paneWidth, toast, toastUndo, go, textSize, width, font } = useStore(useShallow((s) => ({ view: s.view, pane: s.pane, sidebarOpen: s.sidebarOpen, paneWidth: s.paneWidth, toast: s.toast, toastUndo: s.toastUndo, go: s.go, textSize: s.textSize, width: s.width, font: s.font })));
+  const { view, pane, sidebarOpen, paneWidth, toast, toastUndo, go, textSize, width, font, contentRev } = useStore(useShallow((s) => ({ contentRev: s.contentRev, view: s.view, pane: s.pane, sidebarOpen: s.sidebarOpen, paneWidth: s.paneWidth, toast: s.toast, toastUndo: s.toastUndo, go: s.go, textSize: s.textSize, width: s.width, font: s.font })));
   const reduced = useReduced();
   const scroller = useRef<HTMLDivElement | null>(null);
   const [far, setFar] = useState(false);
@@ -51,6 +53,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void refreshContent(true);
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshContent(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  useEffect(() => {
     const onHash = () => useStore.getState().applyHash();
     window.addEventListener("popstate", onHash);
     window.addEventListener("hashchange", onHash);
@@ -62,7 +71,7 @@ export default function App() {
         if (k === "k") { e.preventDefault(); st.setPalette(!st.palette); return; }
         if (k === "b") { e.preventDefault(); st.set({ sidebarOpen: !st.sidebarOpen }); return; }
         if (e.key === ",") { e.preventDefault(); st.settings ? st.closeSettings() : st.openSettings(); return; }
-        if (/^[1-7]$/.test(e.key)) { e.preventDefault(); st.go({ kind: "chapter", id: CHAPTERS[Number(e.key) - 1].id }); return; }
+        if (/^[1-9]$/.test(e.key) && CHAPTERS[Number(e.key) - 1]) { e.preventDefault(); st.go({ kind: "chapter", id: CHAPTERS[Number(e.key) - 1].id }); return; }
       }
       const tag = (e.target as HTMLElement | null)?.tagName;
       const typing = tag === "TEXTAREA" || tag === "INPUT" || (e.target as HTMLElement | null)?.isContentEditable;
@@ -146,7 +155,7 @@ export default function App() {
   const active = useActiveSection(scroller, sections.map((s) => s.id), chapterId ?? "");
 
   return (
-    <div className="gf" data-motion={reduced ? "reduced" : "full"} data-sb={sidebarOpen ? "open" : "closed"} style={{ "--sbw": sidebarOpen ? "300px" : "0px", "--panew": pane ? `${paneWidth}px` : "0px", "--ps": TEXT_PX[textSize], "--cw": WIDTH_PX[width], "--pf": font === "serif" ? "var(--serif)" : "var(--sans)" } as React.CSSProperties}>
+    <div className="gf" key={contentRev} data-motion={reduced ? "reduced" : "full"} data-sb={sidebarOpen ? "open" : "closed"} style={{ "--sbw": sidebarOpen ? "300px" : "0px", "--panew": pane ? `${paneWidth}px` : "0px", "--ps": TEXT_PX[textSize], "--cw": WIDTH_PX[width], "--pf": font === "serif" ? "var(--serif)" : "var(--sans)" } as React.CSSProperties}>
       <style>{CSS}</style>
       <Sidebar />
       <main className="main">
@@ -155,7 +164,8 @@ export default function App() {
           <div className="thread" ref={scroller} onScroll={onScroll}>
             <ErrorBoundary key={vkey} label="This view failed to render">
               {view.kind === "home" && <HomeView onSubmit={submit} />}
-              {view.kind === "chapter" && <div className="col enter" key={view.id}><Doc chapter={view.id} /><NotesBox refKey={`chapter:${view.id}`} title={CHAPTERS.find((c) => c.id === view.id)?.title ?? ""} /></div>}
+              {view.kind === "chapter" && !CHAPTERS.some((c) => c.id === view.id) && <div className="col enter"><h1 className="view-h">That chapter does not exist</h1><p className="meta">It may have been renamed or removed from the documentation.</p><button type="button" className="btn" onClick={() => go({ kind: "home" })}>Back to start</button></div>}
+              {view.kind === "chapter" && CHAPTERS.some((c) => c.id === view.id) && <div className="col enter" key={view.id}><Doc chapter={view.id} /><NotesBox refKey={`chapter:${view.id}`} title={CHAPTERS.find((c) => c.id === view.id)?.title ?? ""} /></div>}
               {view.kind === "thread" && <ThreadView id={view.id} scroller={scroller} />}
               {view.kind === "library" && <LibraryView />}
               {view.kind === "tracker" && <TrackerView />}
