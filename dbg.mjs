@@ -1,0 +1,10 @@
+import { chromium } from "playwright-core";
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+await page.goto("http://127.0.0.1:5199/#/home", { waitUntil: "networkidle" });
+const st = async (l) => console.log(l, await page.evaluate(() => ({ open: document.querySelector("dialog.pal").open, motion: document.querySelector(".gf").dataset.motion })));
+await page.keyboard.press("Control+k"); await page.keyboard.type("reduced motion"); await st("typed1");
+await page.keyboard.press("Enter"); await page.waitForTimeout(300); await st("after enter1");
+await page.keyboard.press("Control+k"); await page.waitForTimeout(200); await st("ctrl+k again");
+await page.keyboard.type("full motion"); await page.keyboard.press("Enter"); await page.waitForTimeout(300); await st("after enter2");
+await browser.close();

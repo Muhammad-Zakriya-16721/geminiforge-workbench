@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-prod/
+dist-final/
+App.tsx
+App.final.tsx
+final/
+shots/
+check-report.json
+.vercel/
+.env
+.env.*
+!.env.example
