@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run build:canvas
+      - run: npx playwright-core install --with-deps chromium
+      - name: Browser tests
+        run: |
+          export CHROME="$(node -e "console.log(require('playwright-core').chromium.executablePath())")"
+          npx vite preview --host 127.0.0.1 --port 5198 &
+          sleep 4
+          export BASE=http://127.0.0.1:5198/
+          node qa-merge.mjs
+          node qa-auto.mjs
+          node qa.mjs
+          node check.mjs

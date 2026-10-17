@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   PanelLeft, Plus, BookOpen, Layers, Cpu, Network, Box, FileText, ShieldCheck, Sparkles,
   ArrowUp, Copy, Check, X, Code2, ChevronRight, ChevronDown, Zap, RotateCcw, FolderKanban, Lock,
-  Search, List, Bookmark, Settings, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload
+  Search, List, Bookmark, Settings, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud
 } from "lucide-react";
 
 // #region 1. TYPES

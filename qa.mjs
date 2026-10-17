@@ -1,6 +1,6 @@
 import { chromium } from "playwright-core";
 const base = process.env.BASE || "http://127.0.0.1:5199/";
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 const errs = []; page.on("pageerror", (e) => errs.push(e.message));
 await page.goto(base + "#/home", { waitUntil: "networkidle" }); await page.evaluate(() => localStorage.clear());

@@ -1,0 +1,47 @@
+// Unit tests for the 3-way merge used by cloud sync (no network).
+import { chromium } from "playwright-core";
+const base = process.env.BASE || "http://127.0.0.1:5198/";
+const browser = await chromium.launch({ executablePath: process.env.CHROME || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
+const page = await (await browser.newContext()).newPage();
+await page.goto(base + "?gftest#/home", { waitUntil: "load" });
+const res = await page.evaluate(() => {
+  const M = window.__gf.mergeStates; const fails = []; let n = 0;
+  const E = { motion: "full", depth: "standard", textSize: "m", width: "normal", font: "serif", name: "", misses: [], lastExport: 0, spikes: {}, audit: {}, pins: [], notes: [], tracker: {}, threads: [] };
+  const w = (o) => ({ ...E, ...o });
+  const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x));
+  const t = (name, got, want) => { n++; if (canon(got) !== canon(want)) fails.push(`${name}\n  got  ${JSON.stringify(got)}\n  want ${JSON.stringify(want)}`); };
+  const note = (id, at, text = id) => ({ id, ref: "chapter:overview", text, at });
+  const th = (id, at, turns, extra = {}) => ({ id, title: id, at, pinned: false, archived: false, turns, ...extra });
+  const turn = (id, role = "user") => ({ id, role, text: id });
+
+  t("both added different notes -> both kept", M(E, w({ notes: [note("a", 2)] }), w({ notes: [note("b", 1)] })).notes.map((x) => x.id), ["a", "b"]);
+  t("deleted locally, untouched remotely -> removed", M(w({ notes: [note("a", 1)] }), w({ notes: [] }), w({ notes: [note("a", 1)] })).notes, []);
+  t("deleted remotely, untouched locally -> removed", M(w({ notes: [note("a", 1)] }), w({ notes: [note("a", 1)] }), w({ notes: [] })).notes, []);
+  t("deleted locally but edited remotely -> kept", M(w({ notes: [note("a", 1)] }), w({ notes: [] }), w({ notes: [note("a", 1, "edited")] })).notes[0].text, "edited");
+  t("identical sides -> unchanged", M(E, w({ notes: [note("a", 1)] }), w({ notes: [note("a", 1)] })).notes.length, 1);
+  t("tracker: status local, note remote -> both", M(w({ tracker: { P1: { status: "todo", note: "" } } }), w({ tracker: { P1: { status: "done", note: "" } } }), w({ tracker: { P1: { status: "todo", note: "n" } } })).tracker, { P1: { status: "done", note: "n" } });
+  t("tracker: different prompts -> both", M(E, w({ tracker: { P1: { status: "done", note: "" } } }), w({ tracker: { P2: { status: "running", note: "" } } })).tracker, { P1: { status: "done", note: "" }, P2: { status: "running", note: "" } });
+  t("scalars: local text size, remote width", (({ textSize, width }) => ({ textSize, width }))(M(E, w({ textSize: "l" }), w({ width: "wide" }))), { textSize: "l", width: "wide" });
+  t("scalar conflict -> this device wins", M(E, w({ name: "A" }), w({ name: "B" })).name, "A");
+  t("local unchanged scalar takes remote", M(E, w({}), w({ font: "sans" })).font, "sans");
+  t("pins: add + add", M(E, w({ pins: ["x"] }), w({ pins: ["y"] })).pins.sort(), ["x", "y"]);
+  t("pins: removed locally stays removed", M(w({ pins: ["x", "y"] }), w({ pins: ["y"] }), w({ pins: ["x", "y"] })).pins, ["y"]);
+  t("pins: removed remotely stays removed", M(w({ pins: ["x", "y"] }), w({ pins: ["x", "y"] }), w({ pins: ["x"] })).pins, ["x"]);
+  const base1 = th("t1", 5, [turn("u1"), turn("a1", "assistant")]);
+  const merged = M(w({ threads: [base1] }), w({ threads: [th("t1", 5, [...base1.turns, turn("u2"), turn("a2", "assistant")])] }), w({ threads: [th("t1", 5, [...base1.turns, turn("u3"), turn("a3", "assistant")])] })).threads[0].turns.map((x) => x.id);
+  t("thread: turns added on both devices -> all kept in order", merged, ["u1", "a1", "u2", "a2", "u3", "a3"]);
+  t("thread: archived on one device, renamed on the other", (({ archived, title }) => ({ archived, title }))(M(w({ threads: [base1] }), w({ threads: [{ ...base1, archived: true }] }), w({ threads: [{ ...base1, title: "New" }] })).threads[0]), { archived: true, title: "New" });
+  t("threads sorted newest first", M(E, w({ threads: [th("old", 1, [])] }), w({ threads: [th("new", 9, [])] })).threads.map((x) => x.id), ["new", "old"]);
+  t("thread deleted locally, untouched remotely -> gone", M(w({ threads: [base1] }), w({ threads: [] }), w({ threads: [base1] })).threads, []);
+  t("lastExport takes the newest", M(E, w({ lastExport: 5 }), w({ lastExport: 9 })).lastExport, 9);
+  const x = w({ notes: [note("a", 3)], pins: ["p"], tracker: { P1: { status: "done", note: "z" } }, threads: [base1], name: "N" });
+  t("idempotent: merge(base, x, x) = x", M(E, x, x), M(E, x, x));
+  t("merge(x, x, x) = x", M(x, x, x), x);
+  t("first sync from an empty remote keeps local", M(E, x, E).notes.length + M(E, x, E).threads.length, 2);
+  t("first sync from an empty local takes remote", M(E, E, x).notes.length + M(E, E, x).threads.length, 2);
+  return { n, fails };
+});
+console.log(`${res.n - res.fails.length}/${res.n} merge checks passed`);
+res.fails.forEach((f) => console.log("FAIL", f));
+await browser.close();
+process.exit(res.fails.length ? 1 : 0);

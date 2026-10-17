@@ -1,7 +1,7 @@
 // Contract tests for the answer engine, generated from the data itself, so new packs/crates/prompts are covered automatically.
 import { chromium } from "playwright-core";
 const base = process.env.BASE || "http://127.0.0.1:5198/";
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
 const page = await (await browser.newContext()).newPage();
 await page.goto(base + "?gftest#/home", { waitUntil: "load" });
 const res = await page.evaluate(() => {

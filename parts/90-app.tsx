@@ -25,7 +25,7 @@ function useActiveSection(scroller: React.RefObject<HTMLDivElement | null>, ids:
 
 // Test hook (only with ?gftest in the address): lets the test scripts call the answer engine directly.
 if (typeof window !== "undefined" && /[?&]gftest\b/.test(window.location.search)) {
-  (window as unknown as Record<string, unknown>).__gf = { answerQuestion, answerPlain, loadSmart, smartAnswer, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
+  (window as unknown as Record<string, unknown>).__gf = { answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
 }
 
 export default function App() {

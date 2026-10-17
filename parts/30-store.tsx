@@ -174,6 +174,10 @@ interface Store extends Persisted {
   saveFail: boolean;
   printing: boolean;
   smartState: "off" | "loading" | "ready" | "failed";
+  cloudState: "off" | "signedout" | "syncing" | "synced" | "error";
+  cloudEmail: string;
+  cloudAt: number;
+  cloudMsg: string;
   smartMsg: string;
   patchTurn: (threadId: string, turnId: string, p: Partial<Turn>) => void;
   draft: string;
@@ -229,6 +233,10 @@ export const useStore = create<Store>((set, get) => ({
   saveFail: false,
   printing: false,
   smartState: "off",
+  cloudState: "off",
+  cloudEmail: "",
+  cloudAt: 0,
+  cloudMsg: "",
   smartMsg: "",
   patchTurn: (threadId, turnId, p) => set((s) => ({ threads: s.threads.map((t) => (t.id === threadId ? { ...t, turns: t.turns.map((u) => (u.id === turnId ? { ...u, ...p } : u)) } : t)) })),
   draft: "",

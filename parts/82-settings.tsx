@@ -5,6 +5,7 @@ const TABS: { id: string; label: string; Icon: React.ElementType }[] = [
   { id: "shortcuts", label: "Shortcuts", Icon: Keyboard },
   { id: "answers", label: "Answer engine", Icon: MessageSquare },
   { id: "labs", label: "Labs", Icon: FlaskConical },
+  ...(CLOUD_AVAILABLE ? [{ id: "sync", label: "Sync", Icon: Cloud }] : []),
   { id: "data", label: "Data", Icon: Database },
   { id: "about", label: "About", Icon: Info }
 ];
@@ -157,6 +158,8 @@ export function SettingsDialog({ onAsk }: { onAsk: (q: string) => void }) {
         ))}
       </>
     );
+  } else if (tab === "sync") {
+    body = <CloudPanel />;
   } else if (tab === "data") {
     body = (
       <>
