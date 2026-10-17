@@ -1,6 +1,6 @@
 import { chromium } from "playwright-core";
 import fs from "node:fs";
-const exe = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const exe = process.env.CHROME || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const base = process.env.BASE || "http://127.0.0.1:5199/";
 const results = [];
 const ok = (name, cond, extra = "") => { results.push({ name, pass: !!cond, extra }); console.log(`${cond ? "PASS" : "FAIL"} | ${name}${extra ? " | " + extra : ""}`); };
