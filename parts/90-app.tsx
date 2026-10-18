@@ -33,6 +33,7 @@ initContent();
 export default function App() {
   const { view, pane, sidebarOpen, paneWidth, toast, toastUndo, go, textSize, width, font, contentRev } = useStore(useShallow((s) => ({ contentRev: s.contentRev, view: s.view, pane: s.pane, sidebarOpen: s.sidebarOpen, paneWidth: s.paneWidth, toast: s.toast, toastUndo: s.toastUndo, go: s.go, textSize: s.textSize, width: s.width, font: s.font })));
   const reduced = useReduced();
+  useTitleBadge();
   const scroller = useRef<HTMLDivElement | null>(null);
   const [far, setFar] = useState(false);
   const [shown, setShown] = useState<PaneRef | null>(pane);

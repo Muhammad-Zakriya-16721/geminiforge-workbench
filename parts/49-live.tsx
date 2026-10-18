@@ -24,12 +24,15 @@ export function startLive() {
   void sb.auth.getSession().then(({ data }) => {
     if (!data.session || liveCh) return;
     sb.realtime.setAuth(data.session.access_token);
-    liveCh = sb.channel("owner-live")
+    const ch = sb.channel("owner-live");
+    liveCh = ch;
+    ch
       .on("postgres_changes", { event: "*", schema: "public", table: "doc_drafts" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "change_sets" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "docs" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "content_meta" }, () => { void refreshContent(true); bump(); })
       .subscribe((status) => {
+        if (ch !== liveCh) return; // a replaced channel closing must not tear down the new one
         if (status === "SUBSCRIBED") { useStore.setState({ liveState: "live" }); bump(); } // events missed while disconnected are not replayed: refetch
         else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           if (useStore.getState().liveState === "off") return;

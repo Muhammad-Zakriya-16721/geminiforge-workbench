@@ -12,9 +12,12 @@ export function initContent() {
 }
 
 let lastRefresh = 0;
+let contentQuietUntil = 0; // set by the review screens: a change this session just made should not pop a "Documentation updated" toast over its Undo toast
+let contentRefreshRun = 0; // newest refresh wins when several overlap
 export async function refreshContent(force = false): Promise<void> {
   if (!CLOUD_AVAILABLE || /[?&]nolive\b/.test(window.location.search) || (!force && Date.now() - lastRefresh < 60_000)) return;
   lastRefresh = Date.now();
+  const run = ++contentRefreshRun;
   setContentInfo({ contentBusy: true, contentMsg: "" });
   try {
     // cheap check first: when the version number is unchanged, skip the full download
@@ -34,10 +37,11 @@ export async function refreshContent(force = false): Promise<void> {
     const b = validateBundle(await res.json());
     if (!b) throw new Error("The documentation from the server did not have the expected shape, so it was ignored.");
     const changed = JSON.stringify({ ...contentSnapshot(), version: 0 }) !== JSON.stringify({ ...b, version: 0 });
+    if (run !== contentRefreshRun) return; // a newer refresh started; its result is the one to apply
     if (changed) {
       applyContent(b);
       useStore.setState((s) => ({ contentRev: s.contentRev + 1 }));
-      useStore.getState().notify(`Documentation updated (version ${b.version}).`);
+      if (Date.now() > contentQuietUntil) useStore.getState().notify(`Documentation updated (version ${b.version}).`);
     }
     try { window.localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify(b)); } catch { /* storage full: the next start-up just downloads again */ }
     setContentInfo({ contentSource: "live", contentVersion: b.version, contentAt: Date.now(), contentBusy: false });

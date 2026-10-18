@@ -1,9 +1,11 @@
 // #region 5h. ADDED PAGES: documents that are not generated from the spec data (accepted AI proposals and pages you write). Read, edit, history, restore.
 const PAGES_CSS = `
 .pg-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--raise);margin-bottom:8px;font:400 14px var(--sans);width:100%;text-align:left;color:var(--tx2)}
+label.btn:focus-within{outline:2px solid var(--focus);outline-offset:2px}
 .pg-row:hover{background:var(--hover);color:var(--tx)}.pg-row b{font-weight:500;color:var(--tx)}.pg-row .sp{flex:1}
 .md-h3{font:600 18px/1.3 var(--sans);color:var(--tx);margin:24px 0 8px}
 .md ul,.md ol{margin:0 0 14px;padding-left:24px}.md li{margin:3px 0}.md blockquote{margin:0 0 14px;padding:2px 14px;border-left:3px solid var(--line2);color:var(--tx3)}
+.md table{border-collapse:collapse;margin:0 0 14px;font:400 14px/1.5 var(--sans);display:block;overflow-x:auto;max-width:100%}.md th,.md td{border:1px solid var(--line2);padding:5px 10px;text-align:left;vertical-align:top}.md th{background:rgba(255,255,255,.04);font-weight:600;color:var(--tx)}
 .md hr{border:0;border-top:1px solid var(--line);margin:22px 0}.md pre.code{padding:12px 14px;margin:10px 0 14px;font:400 13px/1.6 var(--mono);white-space:pre-wrap;word-break:break-word;color:var(--tx2)}
 .pg-ed{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pg-ed textarea{width:100%;min-height:360px;resize:vertical;border:1px solid var(--line2);background:#181715;border-radius:10px;color:var(--tx);padding:10px 12px;font:400 13.5px/1.55 var(--mono)}
 .pg-ed .pv{border:1px solid var(--line);border-radius:10px;padding:4px 14px;max-height:520px;overflow:auto}
@@ -24,6 +26,13 @@ function Md({ text }: { text: string }) {
       while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
       i++;
       out.push(<pre key={k++} className="code"><code>{buf.join("\n")}</code></pre>);
+      continue;
+    }
+    if (l.includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
+      const cells = (row: string) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+      const head = cells(l); i += 2; const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim() && lines[i].includes("|")) rows.push(cells(lines[i++]));
+      out.push(<table key={k++}><thead><tr>{head.map((c, j) => <th key={j} scope="col"><Inline text={c} /></th>)}</tr></thead><tbody>{rows.map((r, a) => <tr key={a}>{head.map((_, j) => <td key={j}><Inline text={r[j] ?? ""} /></td>)}</tr>)}</tbody></table>);
       continue;
     }
     const h = /^(#{1,6})\s+(.*)$/.exec(l);
@@ -59,7 +68,7 @@ interface RevRow { rev: number; kind: string; created_at: string; title: string 
 const REV_LABEL: Record<string, string> = { ai: "Accepted AI edit", revert: "Undo", edit: "Edit", sync: "Generated" };
 
 export function PagesView({ refId }: { refId?: string }) {
-  const { isAdmin, notify, go, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, go: s.go, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const { isAdmin, adminChecked, notify, go, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, go: s.go, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [rows, setRows] = useState<PageRow[] | null>(null);
   const [page, setPage] = useState<PageRow | null>(null);
   const [revs, setRevs] = useState<RevRow[]>([]);
@@ -91,8 +100,10 @@ export function PagesView({ refId }: { refId?: string }) {
 
   const save = async () => {
     if (!supabase || !page) return;
-    const { error } = await supabase.from("docs").update({ body: draft, title: title.trim() || page.title }).eq("id", page.id);
+    // only if nobody changed the page since it was opened (an accepted AI edit would otherwise be overwritten)
+    const { data: done, error } = await supabase.from("docs").update({ body: draft, title: title.trim() || page.title }).eq("id", page.id).eq("rev", page.rev).select("id");
     if (error) { notify(error.message); return; }
+    if (!done?.length) { notify("This page changed while you were editing (for example an accepted AI edit). Your text is still in the box: copy it, then reopen the page and apply it again."); return; }
     notify("Saved as a new version"); await loadPage(page.ref);
   };
   const restore = async (rev: number) => {
@@ -111,19 +122,36 @@ export function PagesView({ refId }: { refId?: string }) {
     notify("Page moved to the Trash", () => { void supabase!.rpc("restore_pages", { p_ids: [id] }).then(() => { void refreshAi(); }); });
     void refreshAi(); go({ kind: "pages" });
   };
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supabase) return;
-    const slug = newTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-    if (!slug) return;
+  const createPage = async (ttl: string, text: string): Promise<boolean> => {
+    if (!supabase || !ttl.trim()) return false;
+    // titles in other scripts (Urdu, Arabic, ...) have no Latin letters, so they get a short generated id; the title itself is kept as typed
+    const slug = ttl.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || `p-${Date.now().toString(36)}`;
     const { data: ps } = await supabase.from("projects").select("id").order("created_at").limit(1);
-    if (!ps?.[0]) { notify("No project found"); return; }
-    const { error } = await supabase.from("docs").insert({ project_id: ps[0].id, ref: `page:${slug}`, kind: "page", title: newTitle.trim(), body: "", source: "native" });
-    if (error) { notify(error.code === "23505" ? "A page with that name already exists (it may be in the Trash)" : error.message); return; }
-    setNewTitle(""); go({ kind: "pages", ref: `page:${slug}` });
+    if (!ps?.[0]) { notify("No project found"); return false; }
+    const { error } = await supabase.from("docs").insert({ project_id: ps[0].id, ref: `page:${slug}`, kind: "page", title: ttl.trim().slice(0, 200), body: text, source: "native" });
+    if (error) { notify(error.code === "23505" ? "A page with that name already exists (it may be in the Trash)" : error.message); return false; }
+    go({ kind: "pages", ref: `page:${slug}` });
+    return true;
+  };
+  const create = async (e: React.FormEvent) => { e.preventDefault(); if (await createPage(newTitle, "")) setNewTitle(""); };
+  // a Markdown file becomes a new page; the title is its first "# " line or the file name
+  const importFile = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 200_000) { notify("That file is larger than 200 KB"); return; }
+    const text = (await f.text()).replace(/\r\n?/g, "\n");
+    if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(text)) { notify("That does not look like a text file"); return; }
+    const h1 = /^#\s+(.+)$/m.exec(text);
+    await createPage(h1 ? h1[1] : f.name.replace(/\.[^.]+$/, ""), text);
+  };
+  const downloadMd = () => {
+    if (!page) return;
+    const url = URL.createObjectURL(new Blob([page.body ?? ""], { type: "text/markdown" }));
+    const a = document.createElement("a"); a.href = url; a.download = `${page.ref.replace(/^page:/, "").replace(/[^\w.-]+/g, "-") || "page"}.md`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta">Sign in under Settings, then Sync, to see pages.</p></div>;
+  if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta" role="status">Loading…</p></div>;
   if (!isAdmin) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta">This account is not an administrator of the documentation.</p></div>;
 
   if (!refId) {
@@ -135,6 +163,7 @@ export function PagesView({ refId }: { refId?: string }) {
         <form className="ai-bar" onSubmit={create}>
           <input className="set-in" style={{ width: 260 }} aria-label="New page title" placeholder="New page title" maxLength={120} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
           <button type="submit" className="btn" disabled={!newTitle.trim()}><Plus size={14} aria-hidden />New page</button>
+          <label className="btn" style={{ cursor: "pointer" }}>Import a Markdown file<input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" style={{ position: "absolute", width: 1, height: 1, opacity: 0 }} onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ""; }} /></label>
         </form>
         {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
         {rows === null && !err && <p className="meta" role="status">Loading…</p>}
@@ -162,6 +191,7 @@ export function PagesView({ refId }: { refId?: string }) {
             {editing && <button type="button" className="btn btn-primary" onClick={() => void save()}>Save</button>}
             {editing && <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>}
             <button type="button" className="btn btn-ghost" onClick={async () => notify((await copyText(page.body ?? "")) ? "Copied as Markdown" : "Could not copy")}><Copy size={14} aria-hidden />Copy Markdown</button>
+            <button type="button" className="btn btn-ghost" onClick={downloadMd}>Download .md</button>
             <button type="button" className="btn btn-ghost" onClick={() => void trashPage()}><Trash2 size={14} aria-hidden />Move to Trash</button>
           </div>
           {editing ? (

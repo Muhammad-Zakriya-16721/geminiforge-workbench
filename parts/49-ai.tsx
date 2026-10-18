@@ -15,6 +15,7 @@ const AI_CSS = `
 .ai-diff ins{background:rgba(125,211,160,.16);color:var(--ok);text-decoration:underline;text-decoration-style:dotted}
 .ai-diff del{background:rgba(240,138,138,.14);color:var(--bad);text-decoration:line-through}
 .ai-gap{color:var(--tx4);font-style:italic}
+.ai-checks{list-style:none;margin:0 0 10px;padding:0;font:400 13.5px/1.5 var(--sans);color:var(--tx2)}.ai-checks li{margin:4px 0}
 .ai-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .ai-rej{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.ai-rej input{flex:1;min-width:220px;width:auto}
 .ai-keys{font:400 12px var(--sans);color:var(--tx4);margin:0 0 10px}.ai-keys kbd{font:500 11px var(--mono);border:1px solid var(--line2);border-radius:5px;padding:1px 5px;color:var(--tx3)}
@@ -181,6 +182,12 @@ export function InboxView() {
   const [peek, setPeek] = useState("");
   const [wide, setWide] = useState(false);
   const els = useRef<Record<string, HTMLDivElement | null>>({});
+  // "new since you last looked": the time of the previous visit is kept in this browser only
+  const lastSeen = useRef(0);
+  useEffect(() => {
+    try { lastSeen.current = Number(window.localStorage.getItem("gf_inbox_seen") ?? "0") || 0; } catch { /* no storage: no digest */ }
+    return () => { try { window.localStorage.setItem("gf_inbox_seen", String(Date.now())); } catch { /* ignore */ } };
+  }, []);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -208,7 +215,7 @@ export function InboxView() {
   const flatRef = useRef<string[]>([]);
   const decide = useCallback(async (ids: string[], approve: boolean, reason?: string): Promise<boolean> => {
     if (!supabase || busyRef.current) return false;
-    busyRef.current = true; setBusy(true);
+    busyRef.current = true; setBusy(true); contentQuietUntil = Date.now() + 15_000;
     const at = flatRef.current.indexOf(ids[0]);
     const next = flatRef.current.slice(at + 1).find((x) => !ids.includes(x)) ?? flatRef.current.slice(0, Math.max(0, at)).reverse().find((x) => !ids.includes(x));
     const { data, error } = await supabase.rpc("decide_drafts", { p_ids: ids, p_approve: approve, p_reason: reason || null });
@@ -226,7 +233,7 @@ export function InboxView() {
 
   const revert = useCallback(async (id: string) => {
     if (!supabase || busyRef.current) return;
-    busyRef.current = true; setBusy(true);
+    busyRef.current = true; setBusy(true); contentQuietUntil = Date.now() + 15_000;
     const { error } = await supabase.rpc("revert_draft", { p_id: id });
     busyRef.current = false; setBusy(false);
     notify(error ? error.message : "Undone: the earlier text is back as a new version");
@@ -251,6 +258,7 @@ export function InboxView() {
   const flat = useMemo(() => shown.flatMap((s) => s.doc_drafts.map((d) => d.id)), [shown]);
   flatRef.current = flat;
   const peekRow = useMemo(() => (peek ? shown.flatMap((s) => s.doc_drafts).find((d) => d.id === peek) ?? null : null), [peek, shown]);
+  const newSince = lastSeen.current ? (sets ?? []).reduce((n, s) => n + s.doc_drafts.filter((d) => new Date(d.created_at).getTime() > lastSeen.current).length, 0) : 0;
   const pendingTotal = (sets ?? []).reduce((n, s) => n + s.doc_drafts.filter((d) => d.status === "pending").length, 0);
 
   const acceptAll = async (pend: DraftRow[]) => {
@@ -299,6 +307,7 @@ export function InboxView() {
         <LiveDot state={liveState} />
         <button type="button" className="btn" onClick={() => void load()}><RefreshCw size={14} aria-hidden />Refresh</button>
       </div>
+      {newSince > 0 && <p className="meta" role="status"><span className="chip warn">{newSince} new</span> edit{newSince === 1 ? "" : "s"} arrived since you last opened this page ({ago(new Date(lastSeen.current).toISOString())}).</p>}
       <p className="ai-keys">With an edit focused: <kbd>j</kbd>/<kbd>k</kbd> next/previous, <kbd>a</kbd> accept, <kbd>r</kbd> reject, <kbd>v</kbd> view the page, <kbd>Esc</kbd> close it.</p>
       {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
       {sets === null && !err && <p className="meta" role="status">Loading…</p>}
@@ -532,6 +541,15 @@ export function AccessView() {
           {project.paused && <span className="chip bad">Paused: tokens are refused</span>}
         </div>
       )}
+      <h2 className="set-h">Checks</h2>
+      <ul className="ai-checks" aria-label="Checks of the AI access settings">
+        {accessChecks(tokens, !!project?.paused, guide, audit.filter((a) => a.status !== "ok").length).map((c, i) => <li key={i}><span className={`chip ${c.level === "warn" ? "warn" : c.level === "ok" ? "ok" : ""}`}>{c.level === "warn" ? "Check" : c.level === "ok" ? "OK" : "Note"}</span> {c.text}</li>)}
+      </ul>
+      <div className="actions">
+        <button type="button" className="btn" onClick={() => void exportOwnerBackup(notify)}>Download backup (JSON)</button>
+        <button type="button" className="btn" onClick={() => void exportLlmsTxt(notify, base)}>Download llms.txt</button>
+      </div>
+      <p className="meta">The backup holds your added pages with their history, every change set with its decisions, messages and token settings. It never contains token secrets (they are not stored).</p>
       <h2 className="set-h">Message for AI tools</h2>
       <p className="meta">Shown to every AI tool when it calls <span className="mono">get_guide</span>, next to the built-in rules (which documents can be edited and how). Use it for your own rules, for example "only fix typos" or "never touch the Governor chapter".</p>
       <textarea className="set-in" style={{ width: "100%", height: 96, padding: 10, resize: "vertical" }} aria-label="Message for AI tools" maxLength={3500} value={guide} onChange={(e) => setGuide(e.target.value)} />

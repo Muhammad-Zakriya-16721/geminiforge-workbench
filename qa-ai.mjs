@@ -66,7 +66,7 @@ async function setup(st) {
     const req = r.request(), u = req.url();
     if (req.method() === "DELETE") { const ids = (decodeURIComponent(u).match(/id=in\.\(([^)]*)\)/)?.[1] ?? "").split(",").filter(Boolean); st.calls.push(["purge-pages", ids]); st.trashPages = st.trashPages.filter((x) => !ids.includes(x.id)); return send(r, ids.map((id) => ({ id }))); }
     if (/deleted_at=not\.is\.null/.test(u)) return send(r, st.trashPages);
-    if (req.method() === "PATCH") { st.calls.push(["docpatch", req.postDataJSON()]); return r.fulfill({ status: 204, body: "" }); }
+    if (req.method() === "PATCH") { st.calls.push(["docpatch", req.postDataJSON(), u]); if (/select=/.test(u)) return send(r, st.docConflict ? [] : [{ id: "dd1" }]); return r.fulfill({ status: 204, body: "" }); }
     if (req.method() === "POST") { st.calls.push(["docinsert", req.postDataJSON()]); return r.fulfill({ status: 201, body: "" }); }
     if (/select=title%2Cbody/.test(u)) return send(r, [{ title: "Alpha page", body: "## Intro\n\n" + BASE_TEXT }]);
     if (/source=eq.native/.test(u) && /ref=eq/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString(), body: PAGE_MD }]);
@@ -102,6 +102,13 @@ ok("inbox: sets and edits shown, highest risk first", order[0] === "Beta page" &
 ok("inbox: risk chips in plain words", /Replaces the whole text/.test(await text(p, ".ai-set")) && /Removes a lot of text/.test(await text(p, ".ai-set")) && /High risk/.test(await text(p, ".ai-set")));
 ok("inbox: set header shows the client and the edit count", /claude-code\/2\.1/.test(await text(p, ".ai-set-h")) && /3 edits/.test(await text(p, ".ai-set-h")));
 ok("inbox: bulk buttons offer low-risk and all", (await p.locator('button:has-text("Accept the 2 low-risk")').count()) === 1 && (await p.locator('button:has-text("Accept all 3")').count()) === 1);
+ok("tab title shows the waiting count", /^\(3\)/.test(await p.title()), await p.title());
+await p.click('button:has-text("Accept all 3")'); await p.waitForSelector("dialog[open]");
+ok("inbox: accept all with a high-risk edit asks first", /1 high-risk/.test(await text(p, "dialog[open]")) && !st.calls.some((c) => c[0] === "decide"));
+await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(250);
+await p.click('button:has-text("Reject all")'); await p.waitForSelector("dialog[open]");
+ok("inbox: reject all asks first and cancelling rejects nothing", /Reject 3 edits/.test(await text(p, "dialog[open]")) && !st.calls.some((c) => c[0] === "decide"));
+await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(250);
 
 // 1b. live refresh: a server-side change shows up in place, without moving the page or recreating cards
 const nodeMark = await p.evaluate(() => { const c = document.querySelector(".ai-d"); c.__mark = c.dataset.id; return c.dataset.id; });
@@ -199,6 +206,18 @@ await p.locator('button:has-text("Restore")').first().click(); await p.waitForTi
 ok("pages: restore writes the old version back", st.calls.filter((c) => c[0] === "docpatch").length >= 2);
 await p.click('button:has-text("All added pages")'); await p.fill('input[aria-label="New page title"]', "My new page"); await p.click('button:has-text("New page")'); await p.waitForTimeout(500);
 ok("pages: create inserts page:<slug>", st.calls.some((c) => c[0] === "docinsert" && c[1].ref === "page:my-new-page" && c[1].source === "native"));
+await p.click('button:has-text("Edit")'); await p.fill('textarea[aria-label="Markdown text"]', "| A | B |\n|---|---|\n| 1 | 2 |"); await p.waitForTimeout(200);
+ok("pages: a Markdown table is rendered as a table", (await p.locator(".pg-ed .pv table th").count()) === 2 && (await p.locator(".pg-ed .pv table td").count()) === 2);
+st.docConflict = true; await p.click('button:has-text("Save")'); await p.waitForTimeout(400);
+ok("pages: saving over a newer version is refused and the text is kept", /changed while you were editing/.test(await text(p, ".toast")) && (await p.inputValue('textarea[aria-label="Markdown text"]')).startsWith("| A |"));
+st.docConflict = false; await p.click('button:has-text("Cancel")');
+await p.click('button:has-text("All added pages")');
+await p.setInputFiles('input[type=file]', { name: "x.md", mimeType: "text/markdown", buffer: Buffer.from("# Imported title\n\nhello there") }); await p.waitForTimeout(500);
+ok("pages: importing a Markdown file creates a page from its first heading", st.calls.some((c) => c[0] === "docinsert" && c[1].ref === "page:imported-title" && c[1].title === "Imported title" && c[1].body.includes("hello there")));
+await p.click('button:has-text("All added pages")'); await p.fill('input[aria-label="New page title"]', "نوٹس"); await p.click('button:has-text("New page")'); await p.waitForTimeout(500);
+ok("pages: a title without Latin letters still creates a page", st.calls.some((c) => c[0] === "docinsert" && /^page:p-/.test(c[1].ref) && c[1].title === "نوٹس"));
+const [dlmd] = await Promise.all([p.waitForEvent("download"), p.click('button:has-text("Download .md")')]);
+ok("pages: Download .md saves the text", /\.md$/.test(dlmd.suggestedFilename()));
 await p.addScriptTag({ content: axeSrc });
 const ax3 = await p.evaluate(async () => (await window.axe.run(".col", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
 ok("pages: no axe violations", ax3.length === 0, ax3.join(","));
@@ -293,6 +312,25 @@ await p.locator('.ai-tok:has-text("Active token A") button:has-text("Message his
 ok("access: project message history lists versions", (await p.locator('button:text-is("History (1)")').count()) === 1);
 await p.click('button:has-text("History (1)")'); await p.locator('.ai-tok:has-text("Project rule A") button:has-text("Use this text")').click();
 ok("access: restoring a version fills the message box", (await p.inputValue('textarea[aria-label="Message for AI tools"]')) === "Project rule A");
+ok("access: checks list says nothing needs attention", /Nothing needs attention/.test(await text(p, ".ai-checks")), await text(p, ".ai-checks"));
+ok("access: a failed call shows its reason in the activity table", /find text not found/.test(await text(p, ".ai-tbl:last-of-type")));
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Close")').click().catch(() => {});
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Revoke")').click(); await p.waitForSelector("dialog[open]");
+const revokesBefore = st.calls.filter((c) => c[0] === "tokpatch" && c[1].revoked_at).length;
+await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(250);
+ok("access: revoke asks first, cancel keeps the token", st.calls.filter((c) => c[0] === "tokpatch" && c[1].revoked_at).length === revokesBefore);
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Revoke")').click(); await p.waitForSelector("dialog[open]"); await p.click('dialog[open] button:has-text("Revoke")'); await p.waitForTimeout(400);
+ok("access: confirmed revoke is saved", st.calls.filter((c) => c[0] === "tokpatch" && c[1].revoked_at).length === revokesBefore + 1);
+await p.click('button:has-text("Clear activity")'); await p.waitForSelector("dialog[open]");
+ok("access: clearing activity needs typing CLEAR", await p.locator('dialog[open] button:has-text("Clear activity")').isDisabled());
+await p.fill("dialog[open] input", "CLEAR"); await p.click('dialog[open] button:has-text("Clear activity")'); await p.waitForTimeout(400);
+ok("access: clear_activity is called for all rows", st.calls.some((c) => c[0] === "clear-activity" && c[1].p_days === 0));
+const [dl] = await Promise.all([p.waitForEvent("download"), p.click('button:has-text("Download backup")')]);
+const bk = JSON.parse(await (await import("node:fs")).promises.readFile(await dl.path(), "utf8"));
+ok("access: backup file has the expected sections and no secrets", bk.format === "geminiforge-backup" && Array.isArray(bk.added_pages) && Array.isArray(bk.change_sets) && Array.isArray(bk.tokens_without_secrets) && !/token_hash|dk_[0-9a-f]{20}/.test(JSON.stringify(bk)), Object.keys(bk).join(","));
+const [dl2] = await Promise.all([p.waitForEvent("download"), p.click('button:has-text("Download llms.txt")')]);
+const llms = await (await import("node:fs")).promises.readFile(await dl2.path(), "utf8");
+ok("access: llms.txt lists the documents", /^# /.test(llms) && /##\s/.test(llms), llms.slice(0, 120));
 ok("no page errors editing tokens", p.errs.length === 0, p.errs.join("|"));
 await p.context().close();
 
