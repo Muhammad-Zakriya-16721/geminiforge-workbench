@@ -59,7 +59,7 @@ interface RevRow { rev: number; kind: string; created_at: string; title: string 
 const REV_LABEL: Record<string, string> = { ai: "Accepted AI edit", revert: "Undo", edit: "Edit", sync: "Generated" };
 
 export function PagesView({ refId }: { refId?: string }) {
-  const { isAdmin, notify, go, cloudState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, go: s.go, cloudState: s.cloudState })));
+  const { isAdmin, notify, go, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, go: s.go, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [rows, setRows] = useState<PageRow[] | null>(null);
   const [page, setPage] = useState<PageRow | null>(null);
   const [revs, setRevs] = useState<RevRow[]>([]);
@@ -85,7 +85,9 @@ export function PagesView({ refId }: { refId?: string }) {
       setRevs((rv ?? []) as RevRow[]);
     }
   }, []);
-  useEffect(() => { setPage(null); if (refId) void loadPage(refId); else void loadList(); }, [refId, loadList, loadPage]);
+  useEffect(() => { setPage(null); }, [refId]);
+  // an update from the server refreshes in place; while you are editing it must not overwrite your text
+  useEffect(() => { if (refId) { if (!editing) void loadPage(refId); } else void loadList(); }, [refId, loadList, loadPage, liveTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
     if (!supabase || !page) return;

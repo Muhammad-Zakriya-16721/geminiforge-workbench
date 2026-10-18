@@ -5,7 +5,7 @@ const PASTE_CHARS = 1500;
 interface SlashRow { id: string; label: string; hint: string; run: () => void }
 
 export function Composer({ placeholder, onSubmit, autoFocus }: { placeholder: string; onSubmit: (text: string) => void; autoFocus?: boolean }) {
-  const { draft, setDraft, collapsed, setCollapsed, go, openPane, depth, set, addNote } = useStore(useShallow((s) => ({ draft: s.draft, setDraft: s.setDraft, collapsed: s.collapsed, setCollapsed: s.setCollapsed, go: s.go, openPane: s.openPane, depth: s.depth, set: s.set, addNote: s.addNote })));
+  const { draft, setDraft, collapsed, setCollapsed, go, openPane, depth, set, addNote, contentRev } = useStore(useShallow((s) => ({ contentRev: s.contentRev, draft: s.draft, setDraft: s.setDraft, collapsed: s.collapsed, setCollapsed: s.setCollapsed, go: s.go, openPane: s.openPane, depth: s.depth, set: s.set, addNote: s.addNote })));
   const [depthMenu, setDepthMenu] = useState(false);
   const depthRef = useRef<HTMLDivElement | null>(null);
   useOutside(depthRef, () => setDepthMenu(false), depthMenu);
@@ -48,7 +48,7 @@ export function Composer({ placeholder, onSubmit, autoFocus }: { placeholder: st
     const rowsG: SlashRow[] = groups.map((x) => ({ id: x.id, label: `/${x.id}`, hint: x.desc, run: () => { setDraft(`/${x.id} `); } }));
     if ("note".startsWith(word)) rowsG.push({ id: "note", label: "/note", hint: "Save a note on the page you are viewing", run: () => setDraft("/note ") });
     return { title: "Commands", rows: rowsG };
-  }, [draft, slashOff, go, openPane, setDraft, addNote]);
+  }, [draft, slashOff, go, openPane, setDraft, addNote, contentRev]);
   useEffect(() => { setSel(0); setSlashOff(false); }, [draft.startsWith("/") ? draft : ""]);
 
   const send = () => {

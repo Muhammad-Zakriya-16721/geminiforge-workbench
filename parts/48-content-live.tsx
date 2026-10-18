@@ -17,6 +17,15 @@ export async function refreshContent(force = false): Promise<void> {
   lastRefresh = Date.now();
   setContentInfo({ contentBusy: true, contentMsg: "" });
   try {
+    // cheap check first: when the version number is unchanged, skip the full download
+    const known = useStore.getState().contentVersion;
+    if (!force && known) {
+      try {
+        const v = await fetch(`${SB_URL}/rest/v1/content_meta?select=version`, { headers: { apikey: SB_KEY as string }, signal: AbortSignal.timeout(6_000) });
+        const rows = v.ok ? ((await v.json()) as { version?: number }[]) : [];
+        if (rows[0]?.version === known) { setContentInfo({ contentAt: Date.now(), contentBusy: false }); return; }
+      } catch { /* unknown: fall through to the full download */ }
+    }
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 10_000);
     const res = await fetch(`${SB_URL}/rest/v1/rpc/get_content_bundle`, { method: "POST", signal: ctl.signal, headers: { apikey: SB_KEY as string, "Content-Type": "application/json" }, body: "{}" });

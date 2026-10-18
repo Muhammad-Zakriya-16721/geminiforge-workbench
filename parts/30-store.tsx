@@ -193,6 +193,8 @@ interface Store extends Persisted {
   cloudMsg: string;
   isAdmin: boolean;
   inboxCount: number;
+  liveTick: number;
+  liveState: "off" | "connecting" | "live" | "retry";
   smartMsg: string;
   patchTurn: (threadId: string, turnId: string, p: Partial<Turn>) => void;
   draft: string;
@@ -260,6 +262,8 @@ export const useStore = create<Store>((set, get) => ({
   cloudMsg: "",
   isAdmin: false,
   inboxCount: 0,
+  liveTick: 0,
+  liveState: "off",
   smartMsg: "",
   patchTurn: (threadId, turnId, p) => set((s) => ({ threads: s.threads.map((t) => (t.id === threadId ? { ...t, turns: t.turns.map((u) => (u.id === turnId ? { ...u, ...p } : u)) } : t)) })),
   draft: "",

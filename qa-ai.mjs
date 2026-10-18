@@ -80,6 +80,13 @@ ok("inbox: risk chips in plain words", /Replaces the whole text/.test(await text
 ok("inbox: set header shows the client and the edit count", /claude-code\/2\.1/.test(await text(p, ".ai-set-h")) && /3 edits/.test(await text(p, ".ai-set-h")));
 ok("inbox: bulk buttons offer low-risk and all", (await p.locator('button:has-text("Accept the 2 low-risk")').count()) === 1 && (await p.locator('button:has-text("Accept all 3")').count()) === 1);
 
+// 1b. live refresh: a server-side change shows up in place, without moving the page or recreating cards
+const nodeMark = await p.evaluate(() => { const c = document.querySelector(".ai-d"); c.__mark = c.dataset.id; return c.dataset.id; });
+st.sets[0].doc_drafts.push({ id: "d9", project_id: PID, change_set_id: "s1", doc_ref: "page:z", base_rev: 1, op: "find_replace", rationale: "late", status: "pending", note: null, reject_reason: null, risk_score: 0, risk_flags: [], new_doc: false, result_title: null, applied_rev: null, reverted_at: null, created_at: new Date().toISOString(), decided_at: null });
+await p.evaluate(() => window.__gf.store.setState((s) => ({ liveTick: s.liveTick + 1 })));
+await p.waitForTimeout(700);
+ok("live refresh: new edit appears without reload and existing cards are kept", (await p.locator(".ai-d").count()) === 4 && await p.evaluate((id) => document.querySelector(`.ai-d[data-id="${id}"]`).__mark === id, nodeMark));
+st.sets[0].doc_drafts.pop();
 // 2. diff view
 await p.locator('.ai-d:has-text("Alpha page") button:has-text("Show changes")').click(); await p.waitForSelector(".ai-diff ins"); 
 const dm = [await p.locator(".ai-diff ins").count(), await p.locator(".ai-diff del").count(), (await text(p, ".ai-diff")).slice(0, 200)];

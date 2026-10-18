@@ -5,7 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const SB_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SB_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 export const CLOUD_AVAILABLE = !!SB_URL && !!SB_KEY;
-const sb: SupabaseClient | null = CLOUD_AVAILABLE ? createClient(SB_URL as string, SB_KEY as string) : null;
+const sb: SupabaseClient | null = CLOUD_AVAILABLE ? createClient(SB_URL as string, SB_KEY as string, { realtime: { transport: WebSocket as never } }) : null; // explicit transport: supabase-js 2.118 can silently fall back to long polling in Vite builds (supabase-js issue 2768)
 export const supabase = sb;
 
 // Fields that follow you between devices. View state (sidebar, panel width, open rows, last page) and device choices (smart matching, backup nudge) stay per device.
@@ -120,7 +120,7 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null;
 if (sb && typeof window !== "undefined") {
   setCloud({ cloudState: "signedout" });
   const adopt = (session: { user: { id: string; email?: string } } | null) => {
-    if (!session) { cloudUid = ""; setCloud({ cloudState: "signedout", cloudEmail: "" }); useStore.setState({ isAdmin: false, inboxCount: 0 }); return; }
+    if (!session) { cloudUid = ""; setCloud({ cloudState: "signedout", cloudEmail: "" }); useStore.setState({ isAdmin: false, inboxCount: 0 }); stopLive(); return; }
     if (cloudUid === session.user.id) return;
     cloudUid = session.user.id;
     setCloud({ cloudEmail: session.user.email ?? "" });
@@ -128,7 +128,7 @@ if (sb && typeof window !== "undefined") {
     void syncNow();
     void refreshAi();
   };
-  sb.auth.onAuthStateChange((_event, session) => { setTimeout(() => adopt(session), 0); }); // never await Supabase calls inside this callback
+  sb.auth.onAuthStateChange((_event, session) => { if (session) sb.realtime.setAuth(session.access_token); setTimeout(() => adopt(session), 0); }); // never await Supabase calls inside this callback
   // push soon after a synced field changes
   useStore.subscribe((s) => {
     if (!cloudUid) return;

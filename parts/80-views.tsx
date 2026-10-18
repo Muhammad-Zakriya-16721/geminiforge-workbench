@@ -414,7 +414,7 @@ export function TrackerView() {
 }
 
 export function Palette() {
-  const { open, setPalette, go, openPane, set, motion: mm, resetAll, sidebarOpen, pane, threads, notes } = useStore(useShallow((s) => ({ open: s.palette, setPalette: s.setPalette, go: s.go, openPane: s.openPane, set: s.set, motion: s.motion, resetAll: s.resetAll, sidebarOpen: s.sidebarOpen, pane: s.pane, threads: s.threads, notes: s.notes })));
+  const { open, setPalette, go, openPane, set, motion: mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin } = useStore(useShallow((s) => ({ contentRev: s.contentRev, isAdmin: s.isAdmin, open: s.palette, setPalette: s.setPalette, go: s.go, openPane: s.openPane, set: s.set, motion: s.motion, resetAll: s.resetAll, sidebarOpen: s.sidebarOpen, pane: s.pane, threads: s.threads, notes: s.notes })));
   const dlg = useRef<HTMLDialogElement | null>(null);
   const list = useRef<HTMLDivElement | null>(null);
   const [q, setQ] = useState("");
@@ -434,7 +434,7 @@ export function Palette() {
       { id: "a-trk", title: "Open tracker", sub: "Prompts 01 to 14 and prototype spikes", group: "Action", run: () => go({ kind: "tracker" }) },
       { id: "a-his", title: "Open all questions", sub: "Search, restore and delete saved questions", group: "Action", run: () => go({ kind: "history" }) },
       { id: "a-aud", title: "Open claims review", sub: "Facts to re-check in the documentation", group: "Action", run: () => go({ kind: "audit" }) },
-      ...(useStore.getState().isAdmin ? [
+      ...(isAdmin ? [
         { id: "a-inbox", title: "Open the AI review inbox", sub: "Edits proposed by AI tools, waiting for your decision", group: "Action", run: () => go({ kind: "inbox" }) },
         { id: "a-access", title: "Open AI access", sub: "Tokens, activity and the pause switch", group: "Action", run: () => go({ kind: "access" }) }
       ] : []),
@@ -456,7 +456,7 @@ export function Palette() {
       ...notes.filter((n) => parts.every((w) => n.text.toLowerCase().includes(w))).slice(0, 5).map((n) => ({ id: `note:${n.id}`, title: clip(n.text.replace(/\s+/g, " "), 70), sub: `Note on ${sourceInfo(n.ref)?.title ?? n.ref}`, group: "Note", run: () => sourceInfo(n.ref)?.run() }))
     ] : [];
     return [...(parts.length ? found.slice(0, 40) : found.filter((f) => f.id.startsWith("chapter:") || f.id.startsWith("lab:")).slice(0, 12)), ...mine, ...acts].slice(0, 60);
-  }, [q, go, openPane, set, mm, resetAll, sidebarOpen, pane, threads, notes]);
+  }, [q, go, openPane, set, mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin]);
 
   useEffect(() => { setSel(0); }, [q]);
   useEffect(() => { list.current?.querySelector(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);

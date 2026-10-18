@@ -49,11 +49,13 @@ export async function refreshAi(): Promise<void> {
   try {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
-    if (!uid) { useStore.setState({ isAdmin: false, inboxCount: 0 }); return; }
+    if (!uid) { useStore.setState({ isAdmin: false, inboxCount: 0 }); stopLive(); return; }
     const { data: a } = await supabase.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
-    if (!a) { useStore.setState({ isAdmin: false, inboxCount: 0 }); return; }
+    if (!a) { useStore.setState({ isAdmin: false, inboxCount: 0 }); stopLive(); return; }
     const { count } = await supabase.from("doc_drafts").select("id", { count: "exact", head: true }).eq("status", "pending");
-    useStore.setState({ isAdmin: true, inboxCount: count ?? 0 });
+    const changed = useStore.getState().inboxCount !== (count ?? 0);
+    useStore.setState((s) => ({ isAdmin: true, inboxCount: count ?? 0, liveTick: changed ? s.liveTick + 1 : s.liveTick }));
+    startLive();
   } catch { /* keep the last known state */ }
 }
 if (supabase && typeof window !== "undefined") {
@@ -149,8 +151,13 @@ function DraftCard({ d, docTitle, selected, onDecide, onRevert, cardRef }: { d: 
   );
 }
 
+function LiveDot({ state }: { state: "off" | "connecting" | "live" | "retry" }) {
+  const label = state === "live" ? "Live: new edits appear by themselves" : state === "connecting" ? "Connecting…" : state === "retry" ? "Reconnecting; checking every minute" : "Updates every minute";
+  return <span className={`chip ${state === "live" ? "ok" : state === "retry" ? "warn" : ""}`} role="status" title={label}>{state === "live" ? "Live" : state === "retry" ? "Reconnecting" : state === "connecting" ? "Connecting" : "Auto-check"}</span>;
+}
+
 export function InboxView() {
-  const { isAdmin, notify, cloudState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState })));
+  const { isAdmin, notify, cloudState, liveTick, liveState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick, liveState: s.liveState })));
   const [sets, setSets] = useState<SetRow[] | null>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [err, setErr] = useState("");
@@ -175,7 +182,7 @@ export function InboxView() {
     }
     setTitles(t); setSets(rows);
   }, []);
-  useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load]);
+  useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load, liveTick]);
 
   const decide = useCallback(async (ids: string[], approve: boolean, reason?: string) => {
     if (!supabase || busy) return;
@@ -229,6 +236,7 @@ export function InboxView() {
           <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All</button>
         </div>
         <span className="sp" />
+        <LiveDot state={liveState} />
         <button type="button" className="btn" onClick={() => void load()}><RefreshCw size={14} aria-hidden />Refresh</button>
       </div>
       <p className="ai-keys">With an edit focused: <kbd>j</kbd>/<kbd>k</kbd> next/previous, <kbd>a</kbd> accept, <kbd>r</kbd> reject.</p>
@@ -266,7 +274,7 @@ interface TokenRow { id: string; label: string; mode: string; path_prefixes: str
 interface AuditRow { ts: string; token_label: string | null; tool: string; ref: string | null; status: string }
 
 export function AccessView() {
-  const { isAdmin, notify, cloudState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState })));
+  const { isAdmin, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [project, setProject] = useState<{ id: string; slug: string; name: string; paused: boolean } | null>(null);
   const [guide, setGuide] = useState("");
   const [tokens, setTokens] = useState<TokenRow[]>([]);
@@ -291,7 +299,8 @@ export function AccessView() {
     ]);
     setTokens((t.data ?? []) as TokenRow[]); setAudit((a.data ?? []) as AuditRow[]);
   }, []);
-  useEffect(() => { if (isAdmin) void load(); return () => setSecret(""); }, [isAdmin, load]);
+  useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load, liveTick]);
+  useEffect(() => () => setSecret(""), []);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -25,7 +25,7 @@ function useActiveSection(scroller: React.RefObject<HTMLDivElement | null>, ids:
 
 // Test hook (only with ?gftest in the address): lets the test scripts call the answer engine directly.
 if (typeof window !== "undefined" && /[?&]gftest\b/.test(window.location.search)) {
-  (window as unknown as Record<string, unknown>).__gf = { answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, contentSnapshot, validateBundle, applyContent, refreshContent, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
+  (window as unknown as Record<string, unknown>).__gf = { store: useStore, answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, contentSnapshot, validateBundle, applyContent, refreshContent, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
 }
 
 initContent();
@@ -117,12 +117,8 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [vkey, sec]);
 
-  // New documentation remounts the screen (key={contentRev}); put the reading position back so the update is not visible as a jump to the top.
-  const lastTop = useRef(0);
-  useLayoutEffect(() => { const el = scroller.current; if (el && lastTop.current > 0) el.scrollTop = lastTop.current; }, [contentRev]);
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    lastTop.current = el.scrollTop;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     setFar(dist > 240);
   }, []);
@@ -159,7 +155,7 @@ export default function App() {
   const active = useActiveSection(scroller, sections.map((s) => s.id), chapterId ?? "");
 
   return (
-    <div className="gf" key={contentRev} data-motion={reduced ? "reduced" : "full"} data-sb={sidebarOpen ? "open" : "closed"} style={{ "--sbw": sidebarOpen ? "300px" : "0px", "--panew": pane ? `${paneWidth}px` : "0px", "--ps": TEXT_PX[textSize], "--cw": WIDTH_PX[width], "--pf": font === "serif" ? "var(--serif)" : "var(--sans)" } as React.CSSProperties}>
+    <div className="gf" data-rev={contentRev} data-motion={reduced ? "reduced" : "full"} data-sb={sidebarOpen ? "open" : "closed"} style={{ "--sbw": sidebarOpen ? "300px" : "0px", "--panew": pane ? `${paneWidth}px` : "0px", "--ps": TEXT_PX[textSize], "--cw": WIDTH_PX[width], "--pf": font === "serif" ? "var(--serif)" : "var(--sans)" } as React.CSSProperties}>
       <style>{CSS}</style>
       <Sidebar />
       <main className="main">
