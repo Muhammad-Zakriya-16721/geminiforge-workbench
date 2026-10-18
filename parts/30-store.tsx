@@ -42,7 +42,7 @@ const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 function sanitizeView(v: unknown): View {
   if (isObj(v) && v.kind === "chapter" && isStr(v.id) && chapterIds().includes(v.id as ChapterId)) return { kind: "chapter", id: v.id as ChapterId };
   if (isObj(v) && v.kind === "thread" && isStr(v.id)) return { kind: "thread", id: v.id };
-  if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit")) return { kind: v.kind };
+  if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit" || v.kind === "inbox" || v.kind === "access")) return { kind: v.kind };
   return { kind: "home" };
 }
 
@@ -148,6 +148,8 @@ export function parseHash(h: string): { view: View | null; pane: PaneRef | null 
   else if (seg[0] === "tracker") view = { kind: "tracker" };
   else if (seg[0] === "history") view = { kind: "history" };
   else if (seg[0] === "audit") view = { kind: "audit" };
+  else if (seg[0] === "inbox") view = { kind: "inbox" };
+  else if (seg[0] === "access") view = { kind: "access" };
   else if (seg[0] === "home") view = { kind: "home" };
   return { view, pane };
 }
@@ -159,6 +161,8 @@ export function toHash(view: View, pane: PaneRef | null): string {
   else if (view.kind === "tracker") path = "/tracker";
   else if (view.kind === "history") path = "/history";
   else if (view.kind === "audit") path = "/audit";
+  else if (view.kind === "inbox") path = "/inbox";
+  else if (view.kind === "access") path = "/access";
   return `#${path}${pane ? "?p=" + encodeURIComponent(`${pane.kind}:${pane.id}`) : ""}`;
 }
 
@@ -184,6 +188,8 @@ interface Store extends Persisted {
   cloudEmail: string;
   cloudAt: number;
   cloudMsg: string;
+  isAdmin: boolean;
+  inboxCount: number;
   smartMsg: string;
   patchTurn: (threadId: string, turnId: string, p: Partial<Turn>) => void;
   draft: string;
@@ -249,6 +255,8 @@ export const useStore = create<Store>((set, get) => ({
   cloudEmail: "",
   cloudAt: 0,
   cloudMsg: "",
+  isAdmin: false,
+  inboxCount: 0,
   smartMsg: "",
   patchTurn: (threadId, turnId, p) => set((s) => ({ threads: s.threads.map((t) => (t.id === threadId ? { ...t, turns: t.turns.map((u) => (u.id === turnId ? { ...u, ...p } : u)) } : t)) })),
   draft: "",

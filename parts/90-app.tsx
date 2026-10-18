@@ -171,6 +171,8 @@ export default function App() {
               {view.kind === "tracker" && <TrackerView />}
               {view.kind === "history" && <HistoryView />}
               {view.kind === "audit" && <AuditView />}
+              {view.kind === "inbox" && <InboxView />}
+              {view.kind === "access" && <AccessView />}
             </ErrorBoundary>
           </div>
           {chapterId && <OutlineRail sections={sections} active={active} onGo={(id) => go({ kind: "chapter", id: chapterId, sec: id })} />}

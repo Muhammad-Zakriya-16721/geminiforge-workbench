@@ -99,7 +99,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
 }
 
 export function Sidebar() {
-  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name } = useStore(useShallow((s) => ({ view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
+  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name, isAdmin, inboxCount } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, inboxCount: s.inboxCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
   const recents = threads.filter((t) => !t.archived).sort((a, b) => b.at - a.at).slice(0, 25);
   const pinned = pins.map((k) => ({ k, info: pinInfo(k, threads) })).filter((x) => x.info);
   const done = DEEP_PROMPTS.filter((p) => tracker[p.id]?.status === "done").length;
@@ -117,6 +117,9 @@ export function Sidebar() {
           <button type="button" className="nav" aria-current={view.kind === "library" ? "page" : undefined} onClick={() => go({ kind: "library" })}><FolderKanban size={16} aria-hidden /><span className="nav-t">Library</span></button>
           <button type="button" className="nav" aria-current={view.kind === "tracker" ? "page" : undefined} onClick={() => go({ kind: "tracker" })}><List size={16} aria-hidden /><span className="nav-t">Tracker</span><span className="mono dim small">{done}/{DEEP_PROMPTS.length}</span></button>
           <button type="button" className="nav" aria-current={view.kind === "audit" ? "page" : undefined} onClick={() => go({ kind: "audit" })}><ListChecks size={16} aria-hidden /><span className="nav-t">Claims review</span></button>
+          {isAdmin && <div className="side-sec">AI space</div>}
+          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "inbox" ? "page" : undefined} onClick={() => go({ kind: "inbox" })}><Inbox size={16} aria-hidden /><span className="nav-t">Review inbox</span>{inboxCount > 0 && <span className="mono small acc" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}</button>}
+          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "access" ? "page" : undefined} onClick={() => go({ kind: "access" })}><KeyRound size={16} aria-hidden /><span className="nav-t">AI access</span></button>}
 
           {pinned.length > 0 && <div className="side-sec">Pinned</div>}
           {pinned.map(({ k, info }) => (
@@ -152,7 +155,7 @@ export function Header() {
   const { view, sidebarOpen, set, setPalette, pins, togglePin, threads } = useStore(useShallow((s) => ({ view: s.view, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, pins: s.pins, togglePin: s.togglePin, threads: s.threads })));
   const chapter = view.kind === "chapter" ? CHAPTERS.find((c) => c.id === view.id) : undefined;
   const thread = view.kind === "thread" ? threads.find((t) => t.id === view.id) : undefined;
-  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : "New question";
+  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : "New question";
   const key = viewKey(view);
   const pinnable = !!chapter || !!thread;
   return (
@@ -430,6 +433,10 @@ export function Palette() {
       { id: "a-trk", title: "Open tracker", sub: "Prompts 01 to 14 and prototype spikes", group: "Action", run: () => go({ kind: "tracker" }) },
       { id: "a-his", title: "Open all questions", sub: "Search, restore and delete saved questions", group: "Action", run: () => go({ kind: "history" }) },
       { id: "a-aud", title: "Open claims review", sub: "Facts to re-check in the documentation", group: "Action", run: () => go({ kind: "audit" }) },
+      ...(useStore.getState().isAdmin ? [
+        { id: "a-inbox", title: "Open the AI review inbox", sub: "Edits proposed by AI tools, waiting for your decision", group: "Action", run: () => go({ kind: "inbox" }) },
+        { id: "a-access", title: "Open AI access", sub: "Tokens, activity and the pause switch", group: "Action", run: () => go({ kind: "access" }) }
+      ] : []),
       { id: "a-sb", title: sidebarOpen ? "Collapse sidebar" : "Expand sidebar", sub: "Ctrl B", group: "Action", run: () => set({ sidebarOpen: !sidebarOpen }) },
       ...(pane ? [{ id: "a-pane", title: "Close side panel", sub: "", group: "Action", run: () => openPane(null) }] : []),
       { id: "a-m1", title: "Animations: full motion", sub: mm === "full" ? "Current setting" : "", group: "Action", run: () => set({ motion: "full" }) },

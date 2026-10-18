@@ -6,6 +6,7 @@ const SB_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SB_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 export const CLOUD_AVAILABLE = !!SB_URL && !!SB_KEY;
 const sb: SupabaseClient | null = CLOUD_AVAILABLE ? createClient(SB_URL as string, SB_KEY as string) : null;
+export const supabase = sb;
 
 // Fields that follow you between devices. View state (sidebar, panel width, open rows, last page) and device choices (smart matching, backup nudge) stay per device.
 const SYNC_FIELDS = ["motion", "depth", "textSize", "width", "font", "name", "misses", "lastExport", "spikes", "audit", "pins", "notes", "tracker", "threads"] as const;
@@ -119,12 +120,13 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null;
 if (sb && typeof window !== "undefined") {
   setCloud({ cloudState: "signedout" });
   const adopt = (session: { user: { id: string; email?: string } } | null) => {
-    if (!session) { cloudUid = ""; setCloud({ cloudState: "signedout", cloudEmail: "" }); return; }
+    if (!session) { cloudUid = ""; setCloud({ cloudState: "signedout", cloudEmail: "" }); useStore.setState({ isAdmin: false, inboxCount: 0 }); return; }
     if (cloudUid === session.user.id) return;
     cloudUid = session.user.id;
     setCloud({ cloudEmail: session.user.email ?? "" });
     lastSynced = JSON.stringify(pickSynced(useStore.getState()));
     void syncNow();
+    void refreshAi();
   };
   sb.auth.onAuthStateChange((_event, session) => { setTimeout(() => adopt(session), 0); }); // never await Supabase calls inside this callback
   // push soon after a synced field changes
