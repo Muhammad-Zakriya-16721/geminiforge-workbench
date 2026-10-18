@@ -83,7 +83,9 @@ async function setup(st) {
   await page.route("**/rest/v1/projects*", async (r) => { if (r.request().method() === "PATCH") { st.calls.push(["pause", r.request().postDataJSON()]); st.paused = r.request().postDataJSON().ai_paused; return r.fulfill({ status: 204, body: "" }); } return send(r, [{ id: PID, slug: "demo", name: "Demo docs", ai_paused: st.paused, ai_guide: "Only fix typos." }]); });
   await page.route("**/rest/v1/mcp_tokens*", async (r) => { const m = r.request().method(); if (m === "DELETE") { const ids = (decodeURIComponent(r.request().url()).match(/id=in\.\(([^)]*)\)/)?.[1] ?? "").split(",").filter(Boolean); st.calls.push(["purge-tokens", ids]); st.tokens = st.tokens.filter((t) => !ids.includes(t.id)); return send(r, ids.map((id) => ({ id }))); } if (m === "PATCH") { st.calls.push(["tokpatch", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); } return send(r, st.tokens); });
   await page.route("**/rest/v1/rpc/create_mcp_token", (r) => { const b = r.request().postDataJSON(); st.calls.push(["create", b]); st.tokens.unshift({ id: "t1", label: b.p_label, mode: b.p_mode, path_prefixes: b.p_prefixes, daily_limit: b.p_daily_limit, max_pending: 20, expires_at: new Date(Date.now() + 86400000 * 30).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date().toISOString() }); return send(r, "dk_" + "ab".repeat(32)); });
-  await page.route("**/rest/v1/rpc/mcp_audit_recent", (r) => send(r, [{ ts: new Date().toISOString(), token_label: "Gemini phone", tool: "read_doc", ref: "page:a", status: "ok" }]));
+  await page.route("**/rest/v1/rpc/mcp_audit_log", (r) => send(r, [{ ts: new Date().toISOString(), token_label: "Gemini phone", tool: "read_doc", ref: "page:a", status: "ok", detail: null }, { ts: new Date().toISOString(), token_label: "Gemini phone", tool: "propose_edit", ref: null, status: "mcp:bad_request", detail: "find text not found" }]));
+  await page.route("**/rest/v1/rpc/purge_trash", (r) => { st.calls.push(["purge-trash"]); return send(r, { edits: 0, pages: 0 }); });
+  await page.route("**/rest/v1/rpc/clear_activity", (r) => { st.calls.push(["clear-activity", r.request().postDataJSON()]); return send(r, 2); });
   await page.route("**/functions/v1/docs-mcp/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { tools: [{ name: "list_projects" }, { name: "read_doc" }] } }) }));
   return page;
 }
@@ -234,6 +236,7 @@ await p.locator('.ai-tok:has-text("Trashed edit set") button:has-text("Delete fo
 await p.waitForTimeout(500); // the dialog fades in; scan when it is fully visible
 const axd = await p.evaluate(async () => (await window.axe.run("dialog[open]", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
 ok("trash: confirm dialog for one item has no typing and no axe violations", /for good/.test(await text(p, "dialog[open]")) && (await p.locator("dialog[open] input").count()) === 0 && axd.length === 0, axd.join(","));
+ok("trash: confirm dialog is centered on screen", await p.evaluate(() => { const r = document.querySelector("dialog[open]").getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - innerWidth / 2) < 3 && Math.abs(r.top + r.height / 2 - innerHeight / 2) < 3; }));
 await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(200);
 ok("trash: cancelling deletes nothing", !st.calls.some((c) => c[0] === "purge-edits" && c[1].length > 0));
 await p.locator('.ai-tok:has-text("Trashed edit set") button:has-text("Delete forever")').click(); await p.click('dialog[open] button:has-text("Delete forever")'); await p.waitForTimeout(500);

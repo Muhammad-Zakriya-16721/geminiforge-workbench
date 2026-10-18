@@ -9,9 +9,10 @@ const DRAFT = { readOnlyHint: false, destructiveHint: false, idempotentHint: tru
 const MAX_TEXT = 24000;
 
 // invisible and tag characters can hide instructions inside documentation text
-export const clean = (s) => String(s ?? "").replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]|[\u{E0000}-\u{E007F}]/gu, "");
+export const clean = (s) => String(s ?? "").replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]|[\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu, "");
 const cut = (s, n) => (s.length > n ? s.slice(0, n) + "\n[truncated]" : s);
-const wrap = (text) => { const id = crypto.randomUUID().slice(0, 8); return `<untrusted-docs id="${id}">\n${text}\n</untrusted-docs id="${id}">`; };
+// the text is cut inside the wrapper so the closing tag is never lost
+const wrap = (text) => { const id = crypto.randomUUID().slice(0, 8); return `<untrusted-docs id="${id}">\n${cut(text, MAX_TEXT - 120)}\n</untrusted-docs id="${id}">`; };
 
 const errResult = (e, hint, details) => ({
   isError: true,
@@ -54,7 +55,7 @@ export function buildServer({ rpc, token, ip, client }) {
       const p = await pick(project); if (p.fail) return p.fail;
       const r = await call("mcp_guide", { p_project: p.project });
       if (r.error) return errResult(r.error, r.hint);
-      const kinds = r.kinds.map((k) => `- ${k.kind} (${k.docs}): ${EDIT_HELP[k.edit] ?? k.edit}`).join("\n");
+      const kinds = r.kinds.map((k) => `- ${clean(k.kind)} (${k.docs}): ${EDIT_HELP[k.edit] ?? k.edit}`).join("\n");
       const rules = ["Nothing you propose is published: the owner reviews every edit in an inbox and accepts or rejects it.",
         "Read a document first (read_doc) and send its rev as base_rev. Keep each edit small and give a reason in rationale.",
         "Only documents marked edit: free or edit: field can change. For field documents match a short phrase inside one sentence; a phrase that spans two fields or appears twice is refused.",

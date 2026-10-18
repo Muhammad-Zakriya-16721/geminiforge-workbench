@@ -194,6 +194,7 @@ interface Store extends Persisted {
   cloudAt: number;
   cloudMsg: string;
   isAdmin: boolean;
+  adminChecked: boolean; // true once the administrator check has finished (so views can show "Loading" instead of "not an administrator")
   inboxCount: number;
   liveTick: number;
   trashCount: number;
@@ -265,6 +266,7 @@ export const useStore = create<Store>((set, get) => ({
   cloudAt: 0,
   cloudMsg: "",
   isAdmin: false,
+  adminChecked: false,
   inboxCount: 0,
   liveTick: 0,
   trashCount: 0,

@@ -300,6 +300,7 @@ dialog.imp{width:min(560px,calc(100vw - 32px))}
 dialog.pal{padding:0;border:1px solid var(--line2);border-radius:16px;background:#1d1c1a;color:var(--tx);width:min(680px,calc(100vw - 32px));max-height:min(520px,calc(100dvh - 120px));margin:12vh auto auto;box-shadow:0 24px 70px rgba(0,0,0,.6)}
 dialog.pal[open]{display:flex;flex-direction:column;animation:gf-in var(--t-move) var(--ease)}
 dialog.pal::backdrop{background:rgba(0,0,0,.5)}
+dialog.cf{margin:auto;width:min(480px,calc(100vw - 32px));max-height:calc(100dvh - 48px)}
 .pal-in{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .pal-in input{flex:1;border:0;background:transparent;color:var(--tx);font:400 16px var(--sans);outline:0}
 .pal-in:focus-within{box-shadow:inset 0 -2px 0 var(--acc)}

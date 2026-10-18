@@ -10,7 +10,7 @@ const rpc = async (method, params = {}, url = U) => {
   return { status: r.status, ms: Date.now() - t0, body: j.result ?? j };
 };
 const tool = (name, args) => rpc("tools/call", { name, arguments: args });
-let r = await rpc("tools/list"); ok("tools/list: 7 tools", r.status === 200 && r.body.tools?.length === 7, `${r.ms}ms ${r.body.tools?.map((t) => t.name).join(",")}`);
+let r = await rpc("tools/list"); ok("tools/list: 8 tools", r.status === 200 && r.body.tools?.length === 8, `${r.ms}ms ${r.body.tools?.map((t) => t.name).join(",")}`);
 r = await tool("list_projects", {}); ok("list_projects", /geminiforge/.test(r.body.content?.[0]?.text), `${r.ms}ms ${r.body.content?.[0]?.text?.slice(0, 80)}`);
 r = await tool("search_docs", { query: "cgroup.kill", limit: 3 }); ok("search_docs finds crate", /crate:crates\/forge-sandbox/.test(r.body.content?.[0]?.text), `${r.ms}ms total=${r.body.structuredContent?.total}`);
 r = await tool("search_docs", { query: "zzzzqqqq" }); ok("search_docs no match says so", /No matching documentation/.test(r.body.content?.[0]?.text));

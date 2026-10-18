@@ -25,12 +25,13 @@ const AI_CSS = `
 .ai-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px;margin:8px 0 12px}.ai-form label{display:flex;flex-direction:column;gap:4px;font:500 12px var(--sans);color:var(--tx3)}
 .ai-form .set-in{width:100%}
 .ai-tbl{width:100%;border-collapse:collapse;font:400 12.5px var(--sans)}.ai-tbl th{text-align:left;color:var(--tx4);font-weight:500;padding:4px 8px}.ai-tbl td{padding:4px 8px;border-top:1px solid var(--line);color:var(--tx2);word-break:break-word}
-@media (forced-colors:active){.ai-diff ins{outline:1px solid Highlight}.ai-diff del{outline:1px dashed CanvasText}}
+input[type=checkbox].ai-ck{width:20px;height:20px;margin:2px 6px 2px 0;accent-color:var(--accent,#d97757);vertical-align:middle}
+@media (forced-colors:active){.ai-diff ins{outline:1px solid Highlight}.ai-diff del{outline:1px dashed CanvasText}.ai-d:focus-visible{outline:2px solid Highlight}}
 `;
 
 const RISK_LABEL: Record<string, string> = {
   new_doc: "New document", whole_doc: "Replaces the whole text", large_change: "Large change", deletes_content: "Removes a lot of text",
-  numbers_changed: "Numbers changed", code_changed: "Code blocks changed", new_url: "New web link", html: "Adds HTML", odd_link: "Unusual link type", invisible_chars: "Invisible characters"
+  numbers_changed: "Numbers changed", code_changed: "Code blocks changed", new_url: "New web link", html: "Adds HTML", odd_link: "Unusual link type", invisible_chars: "Invisible characters", injection_phrases: "Looks like instructions aimed at an AI"
 };
 const riskLevel = (score: number): "high" | "medium" | "low" => (score >= 4 ? "high" : score >= 2 ? "medium" : "low");
 const ago = (iso: string) => {
@@ -49,16 +50,18 @@ export async function refreshAi(): Promise<void> {
   try {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
-    if (!uid) { useStore.setState({ isAdmin: false, inboxCount: 0, trashCount: 0 }); stopLive(); return; }
-    const { data: a } = await supabase.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
-    if (!a) { useStore.setState({ isAdmin: false, inboxCount: 0 }); stopLive(); return; }
-    const { count } = await supabase.from("doc_drafts").select("id", { count: "exact", head: true }).eq("status", "pending");
+    if (!uid) { useStore.setState({ isAdmin: false, adminChecked: true, inboxCount: 0, trashCount: 0 }); stopLive(); return; }
+    const { data: a, error: ae } = await supabase.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
+    if (ae) { useStore.setState({ adminChecked: true }); return; } // a failed check must not look like "not an administrator"
+    if (!a) { useStore.setState({ isAdmin: false, adminChecked: true, inboxCount: 0 }); stopLive(); return; }
+    const { count, error: ce } = await supabase.from("doc_drafts").select("id", { count: "exact", head: true }).eq("status", "pending");
+    if (ce) { useStore.setState({ isAdmin: true, adminChecked: true }); startLive(); return; }
     const [te, tp] = await Promise.all([
       supabase.from("change_sets").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
       supabase.from("docs").select("id", { count: "exact", head: true }).eq("source", "native").not("deleted_at", "is", null)
     ]);
     const changed = useStore.getState().inboxCount !== (count ?? 0);
-    useStore.setState((s) => ({ isAdmin: true, inboxCount: count ?? 0, trashCount: (te.count ?? 0) + (tp.count ?? 0), liveTick: changed ? s.liveTick + 1 : s.liveTick }));
+    useStore.setState((s) => ({ isAdmin: true, adminChecked: true, inboxCount: count ?? 0, trashCount: te.error || tp.error ? s.trashCount : (te.count ?? 0) + (tp.count ?? 0), liveTick: changed ? s.liveTick + 1 : s.liveTick }));
     startLive();
   } catch { /* keep the last known state */ }
 }
@@ -96,11 +99,11 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   pending: { label: "Waiting", cls: "warn" }, applied: { label: "Accepted", cls: "ok" }, rejected: { label: "Rejected", cls: "" }, stale: { label: "Out of date", cls: "bad" }, approved: { label: "Approved (apply by hand)", cls: "ok" }
 };
 
-function DraftCard({ d, docTitle, selected, peeking, onPeek, onDecide, onRevert, cardRef }: { d: DraftRow; docTitle: string; selected: boolean; peeking: boolean; onPeek: () => void; onDecide: (ids: string[], approve: boolean, reason?: string) => void; onRevert: (id: string) => void; cardRef: (el: HTMLDivElement | null) => void }) {
+function DraftCard({ d, docTitle, selected, peeking, busy, onPeek, onDecide, onRevert, cardRef }: { d: DraftRow; docTitle: string; selected: boolean; peeking: boolean; busy: boolean; onPeek: () => void; onDecide: (ids: string[], approve: boolean, reason?: string) => Promise<boolean>; onRevert: (id: string) => void; cardRef: (el: HTMLDivElement | null) => void }) {
   const [open, setOpen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
-  const [detail, setDetail] = useState<{ before: string; after: string; titleBefore: string; titleAfter: string | null } | null>(null);
+  const [detail, setDetail] = useState<{ before: string; after: string; titleBefore: string; titleAfter: string | null; baseMissing: boolean } | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
     if (!open || detail || !supabase) return;
@@ -112,7 +115,7 @@ function DraftCard({ d, docTitle, selected, peeking, onPeek, onDecide, onRevert,
       ]);
       if (off) return;
       if (dr.error || !dr.data) { setErr(dr.error?.message ?? "Could not load the change"); return; }
-      setDetail({ before: (rev.data?.body as string | undefined) ?? "", after: (dr.data.result_body as string | null) ?? "", titleBefore: (rev.data?.title as string | undefined) ?? "", titleAfter: (dr.data.result_title as string | null) });
+      setDetail({ before: (rev.data?.body as string | undefined) ?? "", after: (dr.data.result_body as string | null) ?? "", titleBefore: (rev.data?.title as string | undefined) ?? "", titleAfter: (dr.data.result_title as string | null), baseMissing: !d.new_doc && (!!rev.error || !rev.data) });
     })();
     return () => { off = true; };
   }, [open, detail, d]);
@@ -133,15 +136,15 @@ function DraftCard({ d, docTitle, selected, peeking, onPeek, onDecide, onRevert,
       <div className="actions">
         <button type="button" className="btn" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide changes" : "Show changes"}</button>
         <button type="button" className="btn" data-act="peek" aria-pressed={peeking} onClick={onPeek}>{peeking ? "Hide page" : "View page"}</button>
-        {pending && <button type="button" className="btn btn-primary" onClick={() => onDecide([d.id], true)}>Accept</button>}
+        {pending && <button type="button" className="btn btn-primary" disabled={busy} aria-busy={busy} onClick={() => void onDecide([d.id], true)}>{busy ? "Working…" : "Accept"}</button>}
         {pending && <button type="button" className="btn" data-act="reject" aria-expanded={rejecting} onClick={() => setRejecting(!rejecting)}>Reject…</button>}
-        {d.status === "applied" && !d.reverted_at && <button type="button" className="btn" onClick={() => onRevert(d.id)}><Undo2 size={14} aria-hidden />Undo</button>}
+        {d.status === "applied" && !d.reverted_at && <button type="button" className="btn" disabled={busy} onClick={() => onRevert(d.id)}><Undo2 size={14} aria-hidden />Undo</button>}
         {detail && <button type="button" className="btn btn-ghost" onClick={() => { void copyText(detail.after); }}><Copy size={14} aria-hidden />Copy new text</button>}
       </div>
       {rejecting && (
-        <form className="ai-rej" onSubmit={(e) => { e.preventDefault(); onDecide([d.id], false, reason.trim()); setRejecting(false); }}>
+        <form className="ai-rej" onSubmit={(e) => { e.preventDefault(); void onDecide([d.id], false, reason.trim()).then((ok) => { if (ok) setRejecting(false); }); }}>
           <input className="set-in" aria-label="Reason (the AI can read it)" placeholder="Why? The AI can read this" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} autoFocus />
-          <button type="submit" className="btn btn-danger">Reject</button>
+          <button type="submit" className="btn btn-danger" disabled={busy}>Reject</button>
         </form>
       )}
       {open && (
@@ -149,7 +152,8 @@ function DraftCard({ d, docTitle, selected, peeking, onPeek, onDecide, onRevert,
           {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
           {!detail && !err && <p className="meta" role="status">Loading…</p>}
           {detail && detail.titleAfter && detail.titleAfter !== detail.titleBefore && <p className="meta">Title: {detail.titleBefore || "(none)"} → {detail.titleAfter}</p>}
-          {detail && (d.new_doc ? <pre className="ai-diff" tabIndex={0} aria-label="New document text">{detail.after}</pre> : <DiffText a={detail.before} b={detail.after} />)}
+          {detail?.baseMissing && <p className="banner" data-k="conflict" role="alert">The version this edit was based on is no longer available, so only the new text is shown.</p>}
+          {detail && (d.new_doc || detail.baseMissing ? <pre className="ai-diff" tabIndex={0} aria-label="New document text">{detail.after}</pre> : <DiffText a={detail.before} b={detail.after} />)}
         </div>
       )}
     </div>
@@ -162,7 +166,11 @@ function LiveDot({ state }: { state: "off" | "connecting" | "live" | "retry" }) 
 }
 
 export function InboxView() {
-  const { isAdmin, notify, cloudState, liveTick, liveState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick, liveState: s.liveState })));
+  const { isAdmin, adminChecked, notify, cloudState, liveTick, liveState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick, liveState: s.liveState })));
+  const { ask, node: confirmNode } = useConfirm();
+  const [limit, setLimit] = useState(60);
+  const [more, setMore] = useState(false);
+  const busyRef = useRef(false);
   const [sets, setSets] = useState<SetRow[] | null>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [err, setErr] = useState("");
@@ -176,12 +184,17 @@ export function InboxView() {
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from("change_sets")
-      .select("id,project_id,title,summary,client,created_at,doc_drafts(id,project_id,change_set_id,doc_ref,base_rev,op,rationale,status,note,reject_reason,risk_score,risk_flags,new_doc,result_title,applied_rev,reverted_at,created_at,decided_at)")
-      .is("deleted_at", null).order("created_at", { ascending: false }).limit(60);
+    const cols = "id,project_id,change_set_id,doc_ref,base_rev,op,rationale,status,note,reject_reason,risk_score,risk_flags,new_doc,result_title,applied_rev,reverted_at,created_at,decided_at";
+    const [{ data, error }, waiting] = await Promise.all([
+      supabase.from("change_sets").select(`id,project_id,title,summary,client,created_at,doc_drafts(${cols})`).is("deleted_at", null).order("created_at", { ascending: false }).limit(limit),
+      // sets with waiting edits always show, however old they are
+      supabase.from("change_sets").select(`id,project_id,title,summary,client,created_at,doc_drafts!inner(${cols})`).is("deleted_at", null).eq("doc_drafts.status", "pending").order("created_at", { ascending: false }).limit(200)
+    ]);
     if (error) { setErr(error.message); return; }
     setErr("");
-    const rows = (data ?? []) as unknown as SetRow[];
+    const main = (data ?? []) as unknown as SetRow[];
+    const rows = [...main, ...((waiting.data ?? []) as unknown as SetRow[]).filter((w) => !main.some((m) => m.id === w.id))];
+    setMore(main.length >= limit);
     const refs = [...new Set(rows.flatMap((r) => r.doc_drafts.filter((d) => !d.new_doc).map((d) => d.doc_ref)))];
     const t: Record<string, string> = {};
     if (refs.length) {
@@ -189,26 +202,33 @@ export function InboxView() {
       for (const x of docs ?? []) t[x.ref as string] = x.title as string;
     }
     setTitles(t); setSets(rows);
-  }, []);
+  }, [limit]);
   useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load, liveTick]);
 
-  const decide = useCallback(async (ids: string[], approve: boolean, reason?: string) => {
-    if (!supabase || busy) return;
-    setBusy(true);
+  const flatRef = useRef<string[]>([]);
+  const decide = useCallback(async (ids: string[], approve: boolean, reason?: string): Promise<boolean> => {
+    if (!supabase || busyRef.current) return false;
+    busyRef.current = true; setBusy(true);
+    const at = flatRef.current.indexOf(ids[0]);
+    const next = flatRef.current.slice(at + 1).find((x) => !ids.includes(x)) ?? flatRef.current.slice(0, Math.max(0, at)).reverse().find((x) => !ids.includes(x));
     const { data, error } = await supabase.rpc("decide_drafts", { p_ids: ids, p_approve: approve, p_reason: reason || null });
-    setBusy(false);
-    if (error) { notify(error.message); return; }
+    busyRef.current = false; setBusy(false);
+    if (error) { notify(error.message); return false; }
     const res = (data ?? []) as { id: string; status: string }[];
     const n = (s: string) => res.filter((r) => r.status === s).length;
     const applied = res.filter((r) => r.status === "applied").map((r) => r.id);
     const parts = [n("applied") && `${n("applied")} accepted`, n("approved") && `${n("approved")} approved to apply by hand`, n("rejected") && `${n("rejected")} rejected`, n("stale") && `${n("stale")} out of date`].filter(Boolean);
-    notify(parts.join(", ") || "Nothing changed", applied.length ? () => { void Promise.all(applied.map((id) => supabase!.rpc("revert_draft", { p_id: id }))).then((rs) => { const bad = rs.find((r) => r.error); if (bad?.error) useStore.getState().notify(`Could not undo: ${bad.error.message}`); void load(); void refreshAi(); }); } : undefined);
+    notify(parts.join(", ") || "Nothing changed", applied.length ? () => { void Promise.all(applied.map((id) => supabase!.rpc("revert_draft", { p_id: id }))).then((rs) => { const bad = rs.find((r) => r.error); useStore.getState().notify(bad?.error ? `Could not undo: ${bad.error.message}` : "Undone: the earlier text is back"); void load(); void refreshAi(); }); } : undefined);
     await load(); void refreshAi();
-  }, [busy, notify, load]);
+    if (next) requestAnimationFrame(() => { setSel(next); els.current[next]?.focus(); }); // keep keyboard triage going
+    return true;
+  }, [notify, load]);
 
   const revert = useCallback(async (id: string) => {
-    if (!supabase) return;
+    if (!supabase || busyRef.current) return;
+    busyRef.current = true; setBusy(true);
     const { error } = await supabase.rpc("revert_draft", { p_id: id });
+    busyRef.current = false; setBusy(false);
     notify(error ? error.message : "Undone: the earlier text is back as a new version");
     await load(); void refreshAi();
   }, [notify, load]);
@@ -223,14 +243,25 @@ export function InboxView() {
     const r = data as { done: string[]; refused: { reason: string }[] };
     setPicked(new Set());
     notify(r.done.length ? `${r.done.length} moved to the Trash${r.refused.length ? `, ${r.refused.length} kept (${r.refused[0].reason})` : ""}` : (r.refused[0]?.reason ?? "Nothing moved"),
-      r.done.length ? () => { void supabase!.rpc("restore_edits", { p_ids: r.done }).then(() => { void load(); void refreshAi(); }); } : undefined);
+      r.done.length ? () => { void supabase!.rpc("restore_edits", { p_ids: r.done }).then(({ error: re }) => { useStore.getState().notify(re ? `Could not restore: ${re.message}` : "Restored"); void load(); void refreshAi(); }); } : undefined);
     await load(); void refreshAi();
   }, [notify, load]);
 
   const shown = useMemo(() => (sets ?? []).map((s) => ({ ...s, doc_drafts: s.doc_drafts.filter((d) => filter === "all" || (filter === "pending" ? d.status === "pending" : d.status !== "pending")).sort((a, b) => b.risk_score - a.risk_score) })).filter((s) => s.doc_drafts.length > 0), [sets, filter]);
   const flat = useMemo(() => shown.flatMap((s) => s.doc_drafts.map((d) => d.id)), [shown]);
+  flatRef.current = flat;
   const peekRow = useMemo(() => (peek ? shown.flatMap((s) => s.doc_drafts).find((d) => d.id === peek) ?? null : null), [peek, shown]);
   const pendingTotal = (sets ?? []).reduce((n, s) => n + s.doc_drafts.filter((d) => d.status === "pending").length, 0);
+
+  const acceptAll = async (pend: DraftRow[]) => {
+    const high = pend.filter((d) => riskLevel(d.risk_score) === "high").length;
+    if (high > 0 && !(await ask({ title: `Accept ${pend.length} edits, including ${high} high-risk?`, body: <>Look at the flagged edits first if you have not. Accepting writes new versions of those pages; each can be undone from Decided.</>, confirmLabel: "Accept all", danger: true }))) return;
+    void decide(pend.map((d) => d.id), true);
+  };
+  const rejectAll = async (pend: DraftRow[]) => {
+    if (pend.length > 1 && !(await ask({ title: `Reject ${pend.length} edits?`, body: <>The AI is told they were rejected. A rejected edit cannot be brought back; the AI would have to propose it again.</>, confirmLabel: "Reject all", danger: true }))) return;
+    void decide(pend.map((d) => d.id), false, "Rejected with the whole change set");
+  };
 
   const onKey = (e: React.KeyboardEvent) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-id]");
@@ -248,6 +279,7 @@ export function InboxView() {
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">Sign in under Settings, then Sync, to review edits that AI tools propose.</p></div>;
+  if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta" role="status">Loading…</p></div>;
   if (!isAdmin) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">This account is not an administrator of the documentation, so there is nothing to review.</p></div>;
   return (
     <div className="col enter" style={{ fontFamily: "var(--sans)", ...(peekRow ? { maxWidth: "min(1280px, 100%)" } : {}) }}>
@@ -279,7 +311,7 @@ export function InboxView() {
           return (
             <section key={s.id} className="ai-set" aria-label={s.title}>
               <div className="ai-set-h">
-                {removable(s) && <input type="checkbox" aria-label={`Select ${s.title}`} checked={picked.has(s.id)} onChange={() => setPicked((x) => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n; })} />}
+                {removable(s) && <input type="checkbox" className="ai-ck" aria-label={`Select ${s.title}`} checked={picked.has(s.id)} onChange={() => setPicked((x) => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n; })} />}
                 <span className="ai-set-t">{s.title}</span>
                 {keptAsHistory(s) && <span className="chip" title="Accepted edits are kept as history. Undo them first to be able to delete the set.">Kept as history</span>}
                 <span className="meta" style={{ margin: 0 }}>{s.client ? `${s.client} · ` : ""}{ago(s.created_at)} · {s.doc_drafts.length} edit{s.doc_drafts.length === 1 ? "" : "s"}</span>
@@ -288,16 +320,18 @@ export function InboxView() {
               {pend.length > 0 && (
                 <div className="ai-set-a">
                   {low.length > 0 && pend.length > low.length && <button type="button" className="btn" disabled={busy} onClick={() => void decide(low.map((d) => d.id), true)}>Accept the {low.length} low-risk</button>}
-                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void decide(pend.map((d) => d.id), true)}>Accept all {pend.length}</button>
-                  <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void decide(pend.map((d) => d.id), false, "Rejected with the whole change set")}>Reject all</button>
+                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void acceptAll(pend)}>Accept all {pend.length}</button>
+                  <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void rejectAll(pend)}>Reject all</button>
                 </div>
               )}
-              {s.doc_drafts.map((d) => <DraftCard key={d.id} d={d} docTitle={d.new_doc ? (d.result_title ?? d.doc_ref) : titles[d.doc_ref] ?? d.doc_ref} selected={sel === d.id} peeking={peek === d.id} onPeek={() => { setSel(d.id); setPeek(peek === d.id ? "" : d.id); }} onDecide={decide} onRevert={revert} cardRef={(el) => { els.current[d.id] = el; }} />)}
+              {s.doc_drafts.map((d) => <DraftCard key={d.id} d={d} docTitle={d.new_doc ? (d.result_title ?? d.doc_ref) : titles[d.doc_ref] ?? d.doc_ref} selected={sel === d.id} peeking={peek === d.id} busy={busy} onPeek={() => { setSel(d.id); setPeek(peek === d.id ? "" : d.id); }} onDecide={decide} onRevert={revert} cardRef={(el) => { els.current[d.id] = el; }} />)}
             </section>
           );
         })}
       </div>
-      {peekRow && <PeekPanel d={peekRow} docTitle={peekRow.new_doc ? (peekRow.result_title ?? peekRow.doc_ref) : titles[peekRow.doc_ref] ?? peekRow.doc_ref} wide={wide} onWide={() => setWide(!wide)} onClose={() => { setPeek(""); els.current[peekRow.id]?.focus(); }} />}
+      {more && <p style={{ textAlign: "center" }}><button type="button" className="btn" onClick={() => setLimit(limit + 60)}>Show older</button></p>}
+      {confirmNode}
+      {peekRow && <PeekPanel d={peekRow} onAccept={peekRow.status === "pending" ? () => void decide([peekRow.id], true) : undefined} onReject={peekRow.status === "pending" ? () => void decide([peekRow.id], false) : undefined} busy={busy} docTitle={peekRow.new_doc ? (peekRow.result_title ?? peekRow.doc_ref) : titles[peekRow.doc_ref] ?? peekRow.doc_ref} wide={wide} onWide={() => setWide(!wide)} onClose={() => { setPeek(""); els.current[peekRow.id]?.focus(); }} />}
       </div>
     </div>
   );
@@ -305,8 +339,8 @@ export function InboxView() {
 
 interface TokenRow { id: string; label: string; mode: string; path_prefixes: string[]; daily_limit: number; max_pending: number; expires_at: string | null; revoked_at: string | null; last_used_at: string | null; last_client: string | null; created_at: string; ai_note: string }
 interface VersionRow { id: number; token_id: string | null; body: string; at: string }
-interface EventRow { id: number; token_id: string; detail: Record<string, unknown>; at: string }
-interface AuditRow { ts: string; token_label: string | null; tool: string; ref: string | null; status: string }
+interface EventRow { id: number; token_id: string; action: string; detail: Record<string, unknown>; at: string }
+interface AuditRow { ts: string; token_label: string | null; tool: string; ref: string | null; status: string; detail: string | null }
 
 const widened = (old: string[], next: string[]) => old.length > 0 && (next.length === 0 || next.some((n) => !old.some((o) => n.startsWith(o))));
 const showVal = (v: unknown): string => (v == null ? "none" : Array.isArray(v) ? (v.length ? v.join(", ") : "all") : typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? new Date(v).toLocaleDateString() : String(v));
@@ -361,7 +395,8 @@ function TokenEditor({ t, versions, ask, onDone }: { t: TokenRow; versions: Vers
 }
 
 export function AccessView() {
-  const { isAdmin, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const { isAdmin, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const guideBase = useRef(""); // the saved text; the box is only overwritten by a reload while it still equals this
   const [project, setProject] = useState<{ id: string; slug: string; name: string; paused: boolean } | null>(null);
   const [guide, setGuide] = useState("");
   const [tokens, setTokens] = useState<TokenRow[]>([]);
@@ -384,15 +419,18 @@ export function AccessView() {
     const { data: ps, error } = await supabase.from("projects").select("id,slug,name,ai_paused,ai_guide").order("created_at").limit(1);
     if (error || !ps?.[0]) { setErr(error?.message ?? "No project found"); return; }
     const p = { id: ps[0].id as string, slug: ps[0].slug as string, name: ps[0].name as string, paused: !!ps[0].ai_paused };
-    setProject(p); setGuide((ps[0].ai_guide as string | null) ?? ""); setErr("");
+    setProject(p); setErr("");
+    const saved = (ps[0].ai_guide as string | null) ?? "";
+    const prev = guideBase.current; // read now: the updater below runs later
+    setGuide((cur) => (cur === prev ? saved : cur)); guideBase.current = saved;
     const [vv, ee] = await Promise.all([
       supabase.from("instruction_versions").select("id,token_id,body,at").eq("project_id", p.id).order("at", { ascending: false }).limit(60),
-      supabase.from("token_events").select("id,token_id,detail,at").eq("project_id", p.id).order("at", { ascending: false }).limit(15)
+      supabase.from("token_events").select("id,token_id,action,detail,at").eq("project_id", p.id).order("at", { ascending: false }).limit(15)
     ]);
     setVersions((vv.data ?? []) as VersionRow[]); setEvents((ee.data ?? []) as EventRow[]);
     const [t, a] = await Promise.all([
       supabase.from("mcp_tokens").select("id,label,mode,path_prefixes,daily_limit,max_pending,expires_at,revoked_at,last_used_at,last_client,created_at,ai_note").eq("project_id", p.id).order("created_at", { ascending: false }),
-      supabase.rpc("mcp_audit_recent", { p_slug: p.slug, p_limit: 40 })
+      supabase.rpc("mcp_audit_log", { p_slug: p.slug, p_limit: 40 })
     ]);
     setTokens((t.data ?? []) as TokenRow[]); setAudit((a.data ?? []) as AuditRow[]);
   }, []);
@@ -407,7 +445,10 @@ export function AccessView() {
     const { data, error } = await supabase.rpc("create_mcp_token", { p_project: project.slug, p_label: f.label.trim(), p_mode: f.mode, p_prefixes: f.prefixes.split(",").map((s) => s.trim()).filter(Boolean), p_ttl_days: days, p_daily_limit: Number(f.limit) || 500 });
     if (error || typeof data !== "string") { setBusy(false); notify(error?.message ?? "Could not create the token"); return; }
     const { data: row } = await supabase.from("mcp_tokens").select("id").eq("project_id", project.id).eq("label", f.label.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (row) await supabase.from("mcp_tokens").update({ max_pending: Math.min(200, Math.max(1, Number(f.pending) || 20)) }).eq("id", row.id);
+    if (row) {
+      const { error: pe } = await supabase.from("mcp_tokens").update({ max_pending: Math.min(200, Math.max(1, Number(f.pending) || 20)) }).eq("id", row.id);
+      if (pe) notify(`Token created, but the waiting-edits limit was not saved (${pe.message}). It stays at 20; change it with Edit.`);
+    }
     setSecret(data); setF({ ...f, label: "" }); setBusy(false);
     await load();
   };
@@ -425,11 +466,23 @@ export function AccessView() {
     notify(error ? error.message : (data?.length ?? 0) === list.length ? "Deleted" : `${data?.length ?? 0} of ${list.length} deleted`);
     await load(); void refreshAi();
   };
-  const revoke = async (id: string) => { if (!supabase) return; const { error } = await supabase.from("mcp_tokens").update({ revoked_at: new Date().toISOString() }).eq("id", id); notify(error ? error.message : "Token revoked"); await load(); };
+  const revoke = async (id: string) => {
+    if (!supabase) return;
+    const t = tokens.find((x) => x.id === id);
+    if (!(await ask({ title: "Revoke this token?", body: <>“{t?.label ?? "This token"}” stops working at once. It cannot be switched on again; you would make a new one.</>, confirmLabel: "Revoke", danger: true }))) return;
+    const { error } = await supabase.from("mcp_tokens").update({ revoked_at: new Date().toISOString() }).eq("id", id); notify(error ? error.message : "Token revoked"); await load();
+  };
   const revokeAll = async () => {
-    if (!supabase || !project || !window.confirm("Revoke every active token for this project? AI tools lose access immediately.")) return;
+    if (!supabase || !project) return;
+    if (!(await ask({ title: "Revoke every active token?", body: <>Every AI tool loses access immediately. Revoked tokens cannot be switched on again.</>, confirmLabel: "Revoke all", danger: true }))) return;
     const { error } = await supabase.from("mcp_tokens").update({ revoked_at: new Date().toISOString() }).eq("project_id", project.id).is("revoked_at", null);
     notify(error ? error.message : "All tokens revoked"); await load();
+  };
+  const clearActivity = async () => {
+    if (!supabase || !project) return;
+    if (!(await ask({ title: "Clear the activity log?", body: <>This removes the list of what AI tools read and proposed. Waiting and decided edits are not touched. The log is also cleaned automatically after 180 days. This cannot be undone.</>, confirmLabel: "Clear activity", danger: true, type: "CLEAR" }))) return;
+    const { data, error } = await supabase.rpc("clear_activity", { p_slug: project.slug, p_days: 0 });
+    notify(error ? error.message : `Cleared ${String(data ?? 0)} rows`); await load();
   };
   const pause = async () => {
     if (!supabase || !project) return;
@@ -439,6 +492,7 @@ export function AccessView() {
   const saveGuide = async () => {
     if (!supabase || !project) return;
     const { error } = await supabase.from("projects").update({ ai_guide: guide.trim() }).eq("id", project.id);
+    if (!error) { guideBase.current = guide.trim(); setGuide(guide.trim()); }
     notify(error ? error.message : "Message saved. AI tools read it when they call get_guide");
   };
   const runTest = async () => {
@@ -446,13 +500,15 @@ export function AccessView() {
     const meta = { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { name: "workbench-test", version: "1" }, "io.modelcontextprotocol/clientCapabilities": {} };
     try {
       const r = await fetch(`${base}/${secret}`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "tools/list" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { _meta: meta } }) });
+      if (!r.ok) { setTest(`The server answered with HTTP ${r.status}${r.status === 401 || r.status === 403 ? " (the token was refused)" : ""}`); return; }
       const t = await r.text(); const d = t.startsWith("event:") ? (t.split("\n").find((l) => l.startsWith("data:")) ?? "").slice(5) : t;
       const names = ((JSON.parse(d).result?.tools ?? []) as { name: string }[]).map((x) => x.name);
       setTest(names.length ? `Works: ${names.length} tools (${names.join(", ")})` : "The server answered but listed no tools");
-    } catch { setTest("Could not reach the server"); }
+    } catch (e) { setTest(e instanceof TypeError ? "Could not reach the server" : "The server answered, but not in the expected format"); }
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta">Sign in under Settings, then Sync, to manage AI access.</p></div>;
+  if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta" role="status">Loading…</p></div>;
   if (!isAdmin) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta">This account is not an administrator of the documentation.</p></div>;
   const url = `${base}/${secret || "TOKEN"}`;
   const snips = {
@@ -478,7 +534,7 @@ export function AccessView() {
       )}
       <h2 className="set-h">Message for AI tools</h2>
       <p className="meta">Shown to every AI tool when it calls <span className="mono">get_guide</span>, next to the built-in rules (which documents can be edited and how). Use it for your own rules, for example "only fix typos" or "never touch the Governor chapter".</p>
-      <textarea className="set-in" style={{ width: "100%", height: 96, padding: 10, resize: "vertical" }} aria-label="Message for AI tools" maxLength={4000} value={guide} onChange={(e) => setGuide(e.target.value)} />
+      <textarea className="set-in" style={{ width: "100%", height: 96, padding: 10, resize: "vertical" }} aria-label="Message for AI tools" maxLength={3500} value={guide} onChange={(e) => setGuide(e.target.value)} />
       <div className="actions">
         <button type="button" className="btn" onClick={() => void saveGuide()}>Save message</button>
         <button type="button" className="btn" aria-expanded={showHist} onClick={() => setShowHist(!showHist)}>History ({versions.filter((v) => !v.token_id).length})</button>
@@ -532,13 +588,13 @@ export function AccessView() {
       {events.length > 0 && (<>
         <h2 className="set-h">Recent token changes</h2>
         <table className="ai-tbl"><thead><tr><th>When</th><th>Token</th><th>Change</th></tr></thead>
-          <tbody>{events.map((e) => <tr key={e.id}><td>{ago(e.at)}</td><td>{tokens.find((x) => x.id === e.token_id)?.label ?? "deleted token"}</td><td>{Object.entries(e.detail).map(([k, v]) => (Array.isArray(v) ? `${k}: ${showVal(v[0])} → ${showVal(v[1])}` : k === "message" ? "message changed" : k)).join("; ")}</td></tr>)}</tbody>
+          <tbody>{events.map((e) => <tr key={e.id}><td>{ago(e.at)}</td><td>{e.action === "activity_cleared" ? "all tokens" : tokens.find((x) => x.id === e.token_id)?.label ?? "deleted token"}</td><td>{e.action === "activity_cleared" ? `activity log cleared (${String(e.detail.rows ?? 0)} rows older than ${String(e.detail.older_than_days ?? 0)} days)` : Object.entries(e.detail).map(([k, v]) => (Array.isArray(v) ? `${k}: ${showVal(v[0])} → ${showVal(v[1])}` : k === "message" ? "message changed" : k)).join("; ")}</td></tr>)}</tbody>
         </table>
       </>)}
-      <h2 className="set-h">Recent activity</h2>
+      <h2 className="set-h">Recent activity{audit.length > 0 && <button type="button" className="btn" onClick={() => void clearActivity()}>Clear activity…</button>}</h2>
       {audit.length === 0 ? <p className="meta">No activity yet.</p> : (
         <table className="ai-tbl"><thead><tr><th>When</th><th>Token</th><th>Tool</th><th>Document</th><th>Result</th></tr></thead>
-          <tbody>{audit.map((a, i) => <tr key={i}><td>{ago(a.ts)}</td><td>{a.token_label ?? "public"}</td><td className="mono">{a.tool}</td><td className="mono">{a.ref ?? ""}</td><td>{a.status}</td></tr>)}</tbody>
+          <tbody>{audit.map((a, i) => <tr key={i}><td>{ago(a.ts)}</td><td>{a.token_label ?? "public"}</td><td className="mono">{a.tool}</td><td className="mono">{a.ref ?? ""}</td><td>{a.status}{a.detail ? <span className="meta" style={{ display: "block", margin: 0 }}>{a.detail}</span> : null}</td></tr>)}</tbody>
         </table>
       )}
     </div>

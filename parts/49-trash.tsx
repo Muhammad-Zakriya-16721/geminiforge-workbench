@@ -4,21 +4,22 @@ interface ConfirmOpts { title: string; body: React.ReactNode; confirmLabel: stri
 function ConfirmDialog({ opts, onClose }: { opts: ConfirmOpts; onClose: (ok: boolean) => void }) {
   const dlg = useRef<HTMLDialogElement | null>(null);
   const [typed, setTyped] = useState("");
-  useEffect(() => { const d = dlg.current; if (d && !d.open) d.showModal(); }, []);
+  const cancel = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { const d = dlg.current; if (d && !d.open) d.showModal(); (opts.type ? d?.querySelector<HTMLInputElement>("input") : cancel.current)?.focus(); }, [opts.type]);
   const okToGo = !opts.type || typed.trim() === opts.type;
   return (
-    <dialog ref={dlg} className="pal imp" aria-labelledby="cf-t" onClose={() => onClose(false)} onClick={(e) => { if (e.target === dlg.current) onClose(false); }}>
+    <dialog ref={dlg} className="pal imp cf" aria-labelledby="cf-t" onClose={() => onClose(false)} onClick={(e) => { if (e.target === dlg.current) onClose(false); }}>
       <form className="imp-in" method="dialog" onSubmit={(e) => { e.preventDefault(); if (okToGo) onClose(true); }}>
         <h2 id="cf-t" className="h4" style={{ marginTop: 0 }}>{opts.title}</h2>
         <div className="meta" style={{ color: "var(--tx2)" }}>{opts.body}</div>
         {opts.type && (
           <label className="meta" style={{ display: "block", marginTop: 8 }}>Type <b className="mono">{opts.type}</b> to confirm
-            <input className="set-in" style={{ display: "block", width: "100%", marginTop: 4 }} autoFocus autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+            <input className="set-in" style={{ display: "block", width: "100%", marginTop: 4 }} autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
           </label>
         )}
         <div className="actions" style={{ marginTop: 14 }}>
           <button type="submit" className={`btn ${opts.danger ? "btn-danger" : "btn-primary"}`} disabled={!okToGo}>{opts.confirmLabel}</button>
-          <button type="button" className="btn" autoFocus={!opts.type} onClick={() => onClose(false)}>Cancel</button>
+          <button type="button" className="btn" ref={cancel} onClick={() => onClose(false)}>Cancel</button>
         </div>
       </form>
     </dialog>
@@ -38,7 +39,7 @@ interface LogRow { id: number; item_type: string; item_id: string; title: string
 const daysLeft = (iso: string) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
 
 export function TrashView() {
-  const { isAdmin, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const { isAdmin, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [rows, setRows] = useState<TrashRow[] | null>(null);
   const [log, setLog] = useState<LogRow[]>([]);
   const [err, setErr] = useState("");
@@ -68,14 +69,10 @@ export function TrashView() {
     setPicked((p) => new Set([...p].filter((k) => out.some((r) => r.key === k))));
   }, []);
 
-  // items past their purge date are removed when the Trash is opened
+  // items past their purge date are removed by the server (also by a daily job)
   useEffect(() => {
     if (!isAdmin || !supabase) return;
-    const now = new Date().toISOString();
-    void Promise.all([
-      supabase.from("change_sets").delete().not("deleted_at", "is", null).lt("purge_after", now),
-      supabase.from("docs").delete().eq("source", "native").not("deleted_at", "is", null).lt("purge_after", now)
-    ]).catch(() => { /* the next visit tries again */ }).then(() => load());
+    void Promise.resolve(supabase.rpc("purge_trash")).catch(() => { /* the daily job or the next visit tries again */ }).then(() => load());
   }, [isAdmin, load]);
   useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load, liveTick]);
 
@@ -101,8 +98,8 @@ export function TrashView() {
     if (!supabase || list.length === 0) return 0;
     let n = 0;
     const eds = list.filter((r) => r.type === "edit").map((r) => r.id), pgs = list.filter((r) => r.type === "page").map((r) => r.id);
-    if (eds.length) { const r = await supabase.from("change_sets").delete().in("id", eds).select("id"); if (r.error) throw r.error; n += r.data?.length ?? 0; }
-    if (pgs.length) { const r = await supabase.from("docs").delete().in("id", pgs).select("id"); if (r.error) throw r.error; n += r.data?.length ?? 0; }
+    if (eds.length) { const r = await supabase.from("change_sets").delete().in("id", eds).not("deleted_at", "is", null).select("id"); if (r.error) throw r.error; n += r.data?.length ?? 0; }
+    if (pgs.length) { const r = await supabase.from("docs").delete().in("id", pgs).not("deleted_at", "is", null).select("id"); if (r.error) throw r.error; n += r.data?.length ?? 0; }
     return n;
   };
   const purgeNow = async (list: TrashRow[]) => {
@@ -136,6 +133,7 @@ export function TrashView() {
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">Trash</h1><p className="meta">Sign in under Settings, then Sync, to use the Trash.</p></div>;
+  if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">Trash</h1><p className="meta" role="status">Loading…</p></div>;
   if (!isAdmin) return <div className="col enter"><h1 className="view-h">Trash</h1><p className="meta">This account is not an administrator of the documentation.</p></div>;
   const tokenLog = log.filter((l) => l.item_type === "token" && l.action === "purged");
   const toggle = (k: string) => setPicked((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -172,7 +170,7 @@ export function TrashView() {
       {selectable && rows !== null && shown.length === 0 && <p className="meta">{(rows ?? []).length === 0 ? "The Trash is empty." : "Nothing matches."}</p>}
       {selectable && shown.map((r) => (
         <div key={r.key} className="ai-tok" data-key={r.key}>
-          <input type="checkbox" aria-label={`Select ${r.title}`} checked={picked.has(r.key)} onChange={() => toggle(r.key)} />
+          <input type="checkbox" className="ai-ck" aria-label={`Select ${r.title}`} checked={picked.has(r.key)} onChange={() => toggle(r.key)} />
           <b>{r.title}</b><span className="chip">{r.type === "edit" ? "Edit set" : "Page"}</span>
           <span className="meta" style={{ margin: 0 }}>{r.sub} · deleted {ago(r.deletedAt)} · purges in {daysLeft(r.purgeAt)} day{daysLeft(r.purgeAt) === 1 ? "" : "s"}</span>
           <span className="sp" />

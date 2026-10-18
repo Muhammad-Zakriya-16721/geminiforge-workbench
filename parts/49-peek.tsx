@@ -65,11 +65,12 @@ const passageOf = (d: { status: string; reverted_at: string | null }, p: Record<
   return accepted ? s("replace") || s("text") || s("find") || s("anchor") : s("find") || s("anchor");
 };
 
-export function PeekPanel({ d, docTitle, wide, onWide, onClose }: { d: DraftRow; docTitle: string; wide: boolean; onWide: () => void; onClose: () => void }) {
+export function PeekPanel({ d, docTitle, wide, busy, onAccept, onReject, onWide, onClose }: { d: DraftRow; docTitle: string; wide: boolean; busy?: boolean; onAccept?: () => void; onReject?: () => void; onWide: () => void; onClose: () => void }) {
   const [body, setBody] = useState<string | null>(null);
   const [title, setTitle] = useState(docTitle);
   const [passage, setPassage] = useState("");
   const [err, setErr] = useState("");
+  const [missed, setMissed] = useState(false);
   const box = useRef<HTMLDivElement | null>(null);
   const closeBtn = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -79,16 +80,17 @@ export function PeekPanel({ d, docTitle, wide, onWide, onClose }: { d: DraftRow;
     void (async () => {
       const [doc, dr] = await Promise.all([
         d.new_doc ? supabase!.from("docs").select("title,body").eq("project_id", d.project_id).eq("ref", d.doc_ref).maybeSingle() : supabase!.from("docs").select("title,body").eq("project_id", d.project_id).eq("ref", d.doc_ref).is("deleted_at", null).maybeSingle(),
-        supabase!.from("doc_drafts").select("payload").eq("id", d.id).single()
+        supabase!.from("doc_drafts").select("payload,result_body,result_title").eq("id", d.id).single()
       ]);
       if (off) return;
       if (doc.error || dr.error) { setErr((doc.error ?? dr.error)?.message ?? "Could not load the page"); return; }
-      setBody((doc.data?.body as string | undefined) ?? ""); setTitle((doc.data?.title as string | undefined) ?? docTitle);
+      // a page that does not exist yet (waiting, rejected or undone new page) is shown from the proposal itself
+      setBody((doc.data?.body as string | undefined) ?? (dr.data?.result_body as string | null) ?? ""); setTitle((doc.data?.title as string | undefined) ?? (dr.data?.result_title as string | null) ?? docTitle);
       setPassage(passageOf(d, (dr.data?.payload as Record<string, unknown> | null) ?? null));
     })();
     return () => { off = true; };
   }, [d, docTitle]);
-  const show = useCallback(() => { if (box.current && passage) markPassage(box.current, passage); }, [passage]);
+  const show = useCallback(() => { if (box.current && passage) setMissed(!markPassage(box.current, passage)); }, [passage]);
   useEffect(() => { if (body !== null) { const t = setTimeout(show, 60); return () => clearTimeout(t); } }, [body, show]);
   useEffect(() => { closeBtn.current?.focus(); }, []);
   const onKey = (e: React.KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
@@ -96,6 +98,8 @@ export function PeekPanel({ d, docTitle, wide, onWide, onClose }: { d: DraftRow;
     <aside className="ai-peek" role="complementary" aria-label={`Page: ${title}`} onKeyDown={onKey}>
       <div className="ai-peek-h">
         <b>{title}</b>
+        {onAccept && <button type="button" className="btn btn-primary" disabled={busy} onClick={onAccept}>Accept</button>}
+        {onReject && <button type="button" className="btn" disabled={busy} onClick={onReject}>Reject</button>}
         <button type="button" className="btn" onClick={show} disabled={!passage}>Show the change</button>
         <button type="button" className="btn" onClick={() => openDocument(d.doc_ref, passage)}>Open the page</button>
         <button type="button" className="btn btn-ghost" aria-pressed={wide} onClick={onWide} title="Make the panel wider or narrower">{wide ? "Narrower" : "Wider"}</button>
@@ -105,6 +109,7 @@ export function PeekPanel({ d, docTitle, wide, onWide, onClose }: { d: DraftRow;
         {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
         {body === null && !err && <p className="meta" role="status">Loading…</p>}
         {body !== null && (body ? <Md text={body} /> : <p className="meta">This page has no text yet.</p>)}
+        {body !== null && passage && missed && <p className="meta" role="status">The passage was not found in the page text (it may be inside a table or code block, or the page changed since).</p>}
         {body !== null && passage && <p className="meta" style={{ marginTop: 10 }}>{d.status === "applied" && !d.reverted_at ? "Highlighted: the text this edit wrote." : "Highlighted: the text this edit wants to change."}</p>}
       </div>
     </aside>
