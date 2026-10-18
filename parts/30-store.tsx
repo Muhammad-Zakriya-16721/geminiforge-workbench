@@ -197,6 +197,7 @@ interface Store extends Persisted {
   inboxCount: number;
   liveTick: number;
   trashCount: number;
+  highlight: string;
   liveState: "off" | "connecting" | "live" | "retry";
   smartMsg: string;
   patchTurn: (threadId: string, turnId: string, p: Partial<Turn>) => void;
@@ -267,6 +268,7 @@ export const useStore = create<Store>((set, get) => ({
   inboxCount: 0,
   liveTick: 0,
   trashCount: 0,
+  highlight: "",
   liveState: "off",
   smartMsg: "",
   patchTurn: (threadId, turnId, p) => set((s) => ({ threads: s.threads.map((t) => (t.id === threadId ? { ...t, turns: t.turns.map((u) => (u.id === turnId ? { ...u, ...p } : u)) } : t)) })),

@@ -45,6 +45,7 @@ async function setup(st) {
   await page.route("**/rest/v1/app_admins*", (r) => send(r, st.admin ? [{ user_id: UID }] : []));
   await page.route("**/rest/v1/doc_drafts*", (r) => {
     const u = r.request().url();
+    if (/select=payload/.test(u)) return send(r, [{ payload: { find: "A sentence that stays the same", replace: "X" } }]);
     if (r.request().method() === "HEAD" || /select=id/.test(u) && /status=eq.pending/.test(u)) return send(r, st.sets.flatMap((s) => s.doc_drafts).filter((x) => x.status === "pending"));
     return send(r, [{ result_body: BASE_TEXT.replace("old", "brand new"), result_title: "Brand new page" }]);
   });
@@ -65,6 +66,7 @@ async function setup(st) {
     if (/deleted_at=not\.is\.null/.test(u)) return send(r, st.trashPages);
     if (req.method() === "PATCH") { st.calls.push(["docpatch", req.postDataJSON()]); return r.fulfill({ status: 204, body: "" }); }
     if (req.method() === "POST") { st.calls.push(["docinsert", req.postDataJSON()]); return r.fulfill({ status: 201, body: "" }); }
+    if (/select=title%2Cbody/.test(u)) return send(r, [{ title: "Alpha page", body: "## Intro\n\n" + BASE_TEXT }]);
     if (/source=eq.native/.test(u) && /ref=eq/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString(), body: PAGE_MD }]);
     if (/source=eq.native/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString() }]);
     return send(r, [{ ref: "page:a", title: "Alpha page" }, { ref: "page:b", title: "Beta page" }]);
@@ -104,6 +106,22 @@ await p.evaluate(() => window.__gf.store.setState((s) => ({ liveTick: s.liveTick
 await p.waitForTimeout(700);
 ok("live refresh: new edit appears without reload and existing cards are kept", (await p.locator(".ai-d").count()) === 4 && await p.evaluate((id) => document.querySelector(`.ai-d[data-id="${id}"]`).__mark === id, nodeMark));
 st.sets[0].doc_drafts.pop();
+// 1c. peek: the page an edit touched, with the changed passage highlighted
+await p.locator('.ai-d:has-text("Alpha page") button[data-act=peek]').click(); await p.waitForSelector(".ai-peek .md"); await p.waitForTimeout(500);
+const hlSize = await p.evaluate(() => CSS.highlights?.get("gf-passage")?.size ?? -1);
+if (hlSize < 0) console.log("DBG", await p.evaluate(() => ({ has: document.querySelector(".ai-peek-b")?.textContent.includes("A sentence that stays the same"), n: CSS.highlights.size, foot: document.querySelector(".ai-peek-b")?.textContent.slice(-160) })));
+ok("peek: page shown beside the list with the changed passage highlighted", /Alpha page/.test(await text(p, ".ai-peek")) && /Hello old world/.test(await text(p, ".ai-peek .md")) && hlSize === 1, `highlights=${hlSize}`);
+const axp = await p.evaluate(async () => (await window.axe?.run(".ai-peek", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] }))?.violations.map((v) => `${v.id}:${v.nodes.length}`) ?? ["no-axe"]);
+await p.addScriptTag({ content: axeSrc }); const axp2 = await p.evaluate(async () => (await window.axe.run(".ai-peek", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
+ok("peek: no axe violations", axp2.length === 0, axp2.join(","));
+await p.click('.ai-peek button:has-text("Wider")'); ok("peek: can be made wider", /62%/.test(await p.evaluate(() => document.querySelector(".ai-split").getAttribute("style"))));
+await p.keyboard.press("Escape"); await p.waitForTimeout(200);
+ok("peek: Escape closes it", (await p.locator(".ai-peek").count()) === 0);
+await p.locator('.ai-d:has-text("Alpha page") button[data-act=peek]').click(); await p.waitForSelector(".ai-peek .md");
+await p.click('.ai-peek button:has-text("Open the page")'); await p.waitForTimeout(400);
+ok("peek: Open the page navigates to the page", /#\/pages\/page%3Aa/.test(p.url()));
+await p.goto(`${base}?gftest#/inbox`, { waitUntil: "networkidle" }); await p.waitForSelector(".ai-set"); await p.waitForTimeout(300);
+
 // 2. diff view
 await p.locator('.ai-d:has-text("Alpha page") button:has-text("Show changes")').click(); await p.waitForSelector(".ai-diff ins"); 
 const dm = [await p.locator(".ai-diff ins").count(), await p.locator(".ai-diff del").count(), (await text(p, ".ai-diff")).slice(0, 200)];
@@ -183,6 +201,13 @@ ok("pages: no axe violations", ax3.length === 0, ax3.join(","));
 ok("no page errors on pages", p.errs.length === 0, p.errs.join("|"));
 await p.context().close();
 
+// 6b2. highlight in a real chapter after "Open the page"
+st = mockState(); p = await setup(st);
+await p.goto(`${base}?gftest#/chapter/overview`, { waitUntil: "networkidle" }); await p.waitForTimeout(500);
+await p.evaluate(() => window.__gf.store.setState({ highlight: "Meet the GeminiForge V20 Architecture." })); await p.waitForTimeout(900);
+ok("chapter: the passage from an edit is highlighted after opening the page", (await p.evaluate(() => CSS.highlights.get("gf-passage")?.size ?? 0)) === 1 && (await p.evaluate(() => window.__gf.store.getState().highlight)) === "");
+await p.context().close();
+
 // 6c. trash
 st = mockState(); p = await setup(st);
 await p.goto(`${base}?gftest#/home`, { waitUntil: "networkidle" }); await p.waitForTimeout(800);
@@ -204,6 +229,7 @@ await p.addScriptTag({ content: axeSrc });
 await p.check('input[aria-label="Select Trashed page"]'); await p.click('button:has-text("Restore (1)")'); await p.waitForTimeout(500);
 ok("trash: restore calls the function", st.calls.some((c) => c[0] === "restore-pages" && c[1].join() === "tp1"));
 await p.locator('.ai-tok:has-text("Trashed edit set") button:has-text("Delete forever")').click(); await p.waitForSelector("dialog[open]");
+await p.waitForTimeout(500); // the dialog fades in; scan when it is fully visible
 const axd = await p.evaluate(async () => (await window.axe.run("dialog[open]", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
 ok("trash: confirm dialog for one item has no typing and no axe violations", /for good/.test(await text(p, "dialog[open]")) && (await p.locator("dialog[open] input").count()) === 0 && axd.length === 0, axd.join(","));
 await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(200);

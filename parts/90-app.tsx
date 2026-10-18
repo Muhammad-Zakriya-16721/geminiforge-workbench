@@ -25,7 +25,7 @@ function useActiveSection(scroller: React.RefObject<HTMLDivElement | null>, ids:
 
 // Test hook (only with ?gftest in the address): lets the test scripts call the answer engine directly.
 if (typeof window !== "undefined" && /[?&]gftest\b/.test(window.location.search)) {
-  (window as unknown as Record<string, unknown>).__gf = { store: useStore, answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, contentSnapshot, validateBundle, applyContent, refreshContent, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
+  (window as unknown as Record<string, unknown>).__gf = { store: useStore, markPassage, answerQuestion, answerPlain, loadSmart, smartAnswer, mergeStates, contentSnapshot, validateBundle, applyContent, refreshContent, data: { FORGEHUB_PACKS, CRATES_LIST, DEEP_PROMPTS, LOCKED_CONFIRMATIONS, SPECIFICATION_PATCHES, PROTOTYPE_SPIKES, INITIAL_ROSTER, INITIAL_TASKS, TIER_CHART_DATA, CHAPTERS } };
 }
 
 initContent();
@@ -92,6 +92,18 @@ export default function App() {
       window.removeEventListener("beforeprint", pre); window.removeEventListener("afterprint", post); window.removeEventListener("popstate", onHash); window.removeEventListener("hashchange", onHash); window.removeEventListener("keydown", onKey); };
   }, []);
 
+  // a passage to show after opening a page from the review inbox: wait for the page to render, highlight it once
+  const highlight = useStore((s) => s.highlight);
+  useEffect(() => {
+    if (!highlight) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      tries++;
+      const el = scroller.current;
+      if ((el && markPassage(el, highlight)) || tries > 25) { clearInterval(t); useStore.setState({ highlight: "" }); }
+    }, 120);
+    return () => clearInterval(t);
+  }, [highlight]);
   const vkey = viewKey(view);
   useEffect(() => { if (window.innerWidth <= 900) useStore.getState().set({ sidebarOpen: false }); }, [vkey]);
   const sec = view.kind === "chapter" ? view.sec : undefined;

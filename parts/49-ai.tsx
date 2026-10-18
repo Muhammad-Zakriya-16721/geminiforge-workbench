@@ -96,7 +96,7 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   pending: { label: "Waiting", cls: "warn" }, applied: { label: "Accepted", cls: "ok" }, rejected: { label: "Rejected", cls: "" }, stale: { label: "Out of date", cls: "bad" }, approved: { label: "Approved (apply by hand)", cls: "ok" }
 };
 
-function DraftCard({ d, docTitle, selected, onDecide, onRevert, cardRef }: { d: DraftRow; docTitle: string; selected: boolean; onDecide: (ids: string[], approve: boolean, reason?: string) => void; onRevert: (id: string) => void; cardRef: (el: HTMLDivElement | null) => void }) {
+function DraftCard({ d, docTitle, selected, peeking, onPeek, onDecide, onRevert, cardRef }: { d: DraftRow; docTitle: string; selected: boolean; peeking: boolean; onPeek: () => void; onDecide: (ids: string[], approve: boolean, reason?: string) => void; onRevert: (id: string) => void; cardRef: (el: HTMLDivElement | null) => void }) {
   const [open, setOpen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -132,6 +132,7 @@ function DraftCard({ d, docTitle, selected, onDecide, onRevert, cardRef }: { d: 
       {(d.note || d.reject_reason) && <p className="meta">{d.reject_reason ? `Your reason: ${d.reject_reason}` : d.note}</p>}
       <div className="actions">
         <button type="button" className="btn" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide changes" : "Show changes"}</button>
+        <button type="button" className="btn" data-act="peek" aria-pressed={peeking} onClick={onPeek}>{peeking ? "Hide page" : "View page"}</button>
         {pending && <button type="button" className="btn btn-primary" onClick={() => onDecide([d.id], true)}>Accept</button>}
         {pending && <button type="button" className="btn" data-act="reject" aria-expanded={rejecting} onClick={() => setRejecting(!rejecting)}>Reject…</button>}
         {d.status === "applied" && !d.reverted_at && <button type="button" className="btn" onClick={() => onRevert(d.id)}><Undo2 size={14} aria-hidden />Undo</button>}
@@ -169,6 +170,8 @@ export function InboxView() {
   const [sel, setSel] = useState("");
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [peek, setPeek] = useState("");
+  const [wide, setWide] = useState(false);
   const els = useRef<Record<string, HTMLDivElement | null>>({});
 
   const load = useCallback(async () => {
@@ -226,26 +229,29 @@ export function InboxView() {
 
   const shown = useMemo(() => (sets ?? []).map((s) => ({ ...s, doc_drafts: s.doc_drafts.filter((d) => filter === "all" || (filter === "pending" ? d.status === "pending" : d.status !== "pending")).sort((a, b) => b.risk_score - a.risk_score) })).filter((s) => s.doc_drafts.length > 0), [sets, filter]);
   const flat = useMemo(() => shown.flatMap((s) => s.doc_drafts.map((d) => d.id)), [shown]);
+  const peekRow = useMemo(() => (peek ? shown.flatMap((s) => s.doc_drafts).find((d) => d.id === peek) ?? null : null), [peek, shown]);
   const pendingTotal = (sets ?? []).reduce((n, s) => n + s.doc_drafts.filter((d) => d.status === "pending").length, 0);
 
   const onKey = (e: React.KeyboardEvent) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-id]");
     if (!el || (e.target as HTMLElement).closest("input,textarea,pre") || e.ctrlKey || e.metaKey || e.altKey) return;
     const id = el.dataset.id as string; const i = flat.indexOf(id);
-    const move = (j: number) => { const t = flat[Math.min(flat.length - 1, Math.max(0, j))]; if (t) { setSel(t); els.current[t]?.focus(); } };
+    const move = (j: number) => { const t = flat[Math.min(flat.length - 1, Math.max(0, j))]; if (t) { setSel(t); els.current[t]?.focus(); if (peek) setPeek(t); } };
     const d = shown.flatMap((s) => s.doc_drafts).find((x) => x.id === id);
     const k = e.key.toLowerCase();
     if (k === "j") { e.preventDefault(); move(i + 1); }
     else if (k === "k") { e.preventDefault(); move(i - 1); }
     else if (k === "a" && d?.status === "pending") { e.preventDefault(); void decide([id], true); }
+    else if (k === "escape" && peek) { e.preventDefault(); setPeek(""); }
+    else if (k === "v") { e.preventDefault(); setPeek(peek === id ? "" : id); }
     else if (k === "r" && d?.status === "pending") { e.preventDefault(); el.querySelector<HTMLButtonElement>("button[data-act=reject]")?.click(); }
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">Sign in under Settings, then Sync, to review edits that AI tools propose.</p></div>;
   if (!isAdmin) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">This account is not an administrator of the documentation, so there is nothing to review.</p></div>;
   return (
-    <div className="col enter" style={{ fontFamily: "var(--sans)" }}>
-      <style>{AI_CSS}</style>
+    <div className="col enter" style={{ fontFamily: "var(--sans)", ...(peekRow ? { maxWidth: "min(1280px, 100%)" } : {}) }}>
+      <style>{AI_CSS}{PEEK_CSS}</style>
       <h1 className="view-h">Review inbox</h1>
       <p className="meta">Everything an AI tool proposes through MCP waits here. Nothing becomes official until you accept it. Each edit shows what the AI saw (its base version), what it wants to change, and why it is flagged. Accepting writes a new version you can undo; you can also restore any older version from history.</p>
       <div className="ai-bar">
@@ -261,10 +267,11 @@ export function InboxView() {
         <LiveDot state={liveState} />
         <button type="button" className="btn" onClick={() => void load()}><RefreshCw size={14} aria-hidden />Refresh</button>
       </div>
-      <p className="ai-keys">With an edit focused: <kbd>j</kbd>/<kbd>k</kbd> next/previous, <kbd>a</kbd> accept, <kbd>r</kbd> reject.</p>
+      <p className="ai-keys">With an edit focused: <kbd>j</kbd>/<kbd>k</kbd> next/previous, <kbd>a</kbd> accept, <kbd>r</kbd> reject, <kbd>v</kbd> view the page, <kbd>Esc</kbd> close it.</p>
       {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
       {sets === null && !err && <p className="meta" role="status">Loading…</p>}
       {sets !== null && shown.length === 0 && <p className="meta">{filter === "pending" ? "Nothing is waiting for review." : "No edits to show."}</p>}
+      <div className={peekRow ? "ai-split" : undefined} style={peekRow ? ({ "--peekw": wide ? "62%" : "42%" } as React.CSSProperties) : undefined}>
       <div onKeyDown={onKey}>
         {shown.map((s) => {
           const pend = s.doc_drafts.filter((d) => d.status === "pending");
@@ -285,10 +292,12 @@ export function InboxView() {
                   <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void decide(pend.map((d) => d.id), false, "Rejected with the whole change set")}>Reject all</button>
                 </div>
               )}
-              {s.doc_drafts.map((d) => <DraftCard key={d.id} d={d} docTitle={d.new_doc ? (d.result_title ?? d.doc_ref) : titles[d.doc_ref] ?? d.doc_ref} selected={sel === d.id} onDecide={decide} onRevert={revert} cardRef={(el) => { els.current[d.id] = el; }} />)}
+              {s.doc_drafts.map((d) => <DraftCard key={d.id} d={d} docTitle={d.new_doc ? (d.result_title ?? d.doc_ref) : titles[d.doc_ref] ?? d.doc_ref} selected={sel === d.id} peeking={peek === d.id} onPeek={() => { setSel(d.id); setPeek(peek === d.id ? "" : d.id); }} onDecide={decide} onRevert={revert} cardRef={(el) => { els.current[d.id] = el; }} />)}
             </section>
           );
         })}
+      </div>
+      {peekRow && <PeekPanel d={peekRow} docTitle={peekRow.new_doc ? (peekRow.result_title ?? peekRow.doc_ref) : titles[peekRow.doc_ref] ?? peekRow.doc_ref} wide={wide} onWide={() => setWide(!wide)} onClose={() => { setPeek(""); els.current[peekRow.id]?.focus(); }} />}
       </div>
     </div>
   );
