@@ -1,6 +1,6 @@
 // GeminiForge V20 Workbench — single-file build. Dark only. Libraries: react, zustand, lucide-react.
 import { flushSync } from "react-dom";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import {

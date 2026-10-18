@@ -117,8 +117,12 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [vkey, sec]);
 
+  // New documentation remounts the screen (key={contentRev}); put the reading position back so the update is not visible as a jump to the top.
+  const lastTop = useRef(0);
+  useLayoutEffect(() => { const el = scroller.current; if (el && lastTop.current > 0) el.scrollTop = lastTop.current; }, [contentRev]);
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
+    lastTop.current = el.scrollTop;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     setFar(dist > 240);
   }, []);

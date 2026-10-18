@@ -54,6 +54,18 @@ ok("live bundle: no page errors", p.errs.length === 0, p.errs.join("|"));
 await p.unroute(RPC); await p.route(RPC, (r) => r.abort());
 await open(p);
 ok("saved copy used when offline at next start", (await side(p)).includes("LIVE-CHANGED TITLE"));
+// 3b. a live update must not throw the reader back to the top
+const j = JSON.parse(JSON.stringify(snap)); j.version = 200; j.chapters[0].title = "SCROLL-KEEP TITLE";
+p = await fresh(); await p.route(RPC, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(snap) }));
+await p.goto(`${base}?gftest#/chapter/overview`, { waitUntil: "networkidle" }); await p.waitForTimeout(500);
+await p.evaluate(() => { const t = document.querySelector(".thread"); t.scrollTop = 700; t.dispatchEvent(new Event("scroll")); });
+await p.waitForTimeout(200);
+const before = await p.evaluate(() => document.querySelector(".thread").scrollTop);
+await p.unroute(RPC); await p.route(RPC, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(j) }));
+await p.evaluate(() => window.__gf.refreshContent(true)); await p.waitForTimeout(700);
+const after = await p.evaluate(() => document.querySelector(".thread").scrollTop);
+ok("live update keeps the scroll position", before > 400 && Math.abs(after - before) < 5 && (await side(p)).includes("SCROLL-KEEP TITLE"), `before=${before} after=${after}`);
+await p.context().close();
 // 4. a bad bundle later must not replace the saved copy
 await p.unroute(RPC); const broken = JSON.parse(JSON.stringify(snap)); broken.version = 124; broken.chapters[0].title = "BROKEN"; delete broken.chapterBlocks[broken.chapters[0].id];
 await p.route(RPC, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(broken) }));
