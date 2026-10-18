@@ -31,6 +31,8 @@ Research behind this plan: four read-only research reports (Supabase Realtime; t
 
 ## 3. Phases
 
+STATUS (2026-10-18): Phases 1, 2, 3 and 4 (edit/message/log parts) are DONE and tested (qa-ai 73/73). Phase 4 leftovers: audit v2 (store error text), shorter get_guide, token prefix/checksum, rotation, path-token kind, tools/list cache. Phases 5-8 not started.
+
 ### Phase 1: live updates without a visible reload (small, high value)
 1. Remove `key={contentRev}`. Make components re-render from the store instead of remounting; memoise heavy parts on `id + updated_at`. Keep the scroll restore as a safety net.
 2. Admin only: one Supabase Realtime channel (Postgres Changes) for `content_meta`, `doc_drafts`, `change_sets`, `docs`. Publish them with `alter publication supabase_realtime add table ...` (never publish `mcp_tokens` or `doc_revisions`; no `replica identity full` on `docs`).
@@ -87,7 +89,7 @@ CI, backup and export, retention jobs, monitoring, Firefox and screen-reader pas
 6. Sanitise document text in tool outputs (done: hidden characters stripped, random-id envelope).
 7. Test the real clients: whether Gemini obeys `get_guide` text (it called it in the last test); Cursor, Claude.ai, ChatGPT UNVERIFIED.
 
-## 5. Decisions needed from you
+## 5. Decisions (defaults applied: trash 30 days; accepted edits kept as history until undone; per-token message yes; no WebSocket for public visitors; audit retention not implemented; change any of these on request)
 1. Trash retention (default 30 days) and audit retention (default 365 days).
 2. Should applied AI edits ever be deletable? Recommendation: no, only hidden.
 3. Per-token message as well as the project message? Recommendation: yes.

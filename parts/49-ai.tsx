@@ -303,14 +303,72 @@ export function InboxView() {
   );
 }
 
-interface TokenRow { id: string; label: string; mode: string; path_prefixes: string[]; daily_limit: number; max_pending: number; expires_at: string | null; revoked_at: string | null; last_used_at: string | null; last_client: string | null; created_at: string }
+interface TokenRow { id: string; label: string; mode: string; path_prefixes: string[]; daily_limit: number; max_pending: number; expires_at: string | null; revoked_at: string | null; last_used_at: string | null; last_client: string | null; created_at: string; ai_note: string }
+interface VersionRow { id: number; token_id: string | null; body: string; at: string }
+interface EventRow { id: number; token_id: string; detail: Record<string, unknown>; at: string }
 interface AuditRow { ts: string; token_label: string | null; tool: string; ref: string | null; status: string }
+
+const widened = (old: string[], next: string[]) => old.length > 0 && (next.length === 0 || next.some((n) => !old.some((o) => n.startsWith(o))));
+const showVal = (v: unknown): string => (v == null ? "none" : Array.isArray(v) ? (v.length ? v.join(", ") : "all") : typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? new Date(v).toLocaleDateString() : String(v));
+
+// edit an active token without making a new one; the secret itself (its hash) can never change
+function TokenEditor({ t, versions, ask, onDone }: { t: TokenRow; versions: VersionRow[]; ask: (o: ConfirmOpts) => Promise<boolean>; onDone: () => void }) {
+  const notify = useStore((s) => s.notify);
+  const [f, setF] = useState({ label: t.label, daily: String(t.daily_limit), pend: String(t.max_pending), prefixes: t.path_prefixes.join(", "), mode: t.mode, expiry: "keep", note: t.ai_note });
+  const [hist, setHist] = useState(false);
+  const mine = versions.filter((v) => v.token_id === t.id).slice(0, 10);
+  const save = async () => {
+    if (!supabase) return;
+    const patch: Record<string, unknown> = {};
+    const pf = f.prefixes.split(",").map((s) => s.trim()).filter(Boolean);
+    if (f.label.trim() && f.label.trim() !== t.label) patch.label = f.label.trim();
+    if (Number(f.daily) !== t.daily_limit) patch.daily_limit = Math.min(100000, Math.max(1, Number(f.daily) || t.daily_limit));
+    if (Number(f.pend) !== t.max_pending) patch.max_pending = Math.min(200, Math.max(1, Number(f.pend) || t.max_pending));
+    if (pf.join("\n") !== t.path_prefixes.join("\n")) patch.path_prefixes = pf;
+    if (f.mode !== t.mode) patch.mode = f.mode;
+    if (f.expiry !== "keep") patch.expires_at = new Date(Date.now() + Number(f.expiry) * 86_400_000).toISOString();
+    if (f.note.trim() !== t.ai_note) patch.ai_note = f.note.trim();
+    if (Object.keys(patch).length === 0) { notify("Nothing changed"); return; }
+    if ((patch.mode === "propose" || ("path_prefixes" in patch && widened(t.path_prefixes, pf))) &&
+      !(await ask({ title: "Give this token more access?", body: <>This lets “{t.label}” {patch.mode === "propose" ? "send edits to your review inbox" : "reach more documents"}. Anything that already holds this token gets the new access at once. Nothing is published without your approval.</>, confirmLabel: "Save changes", danger: true }))) return;
+    const { error } = await supabase.from("mcp_tokens").update(patch).eq("id", t.id);
+    if (error) { notify(error.message); return; }
+    notify("Token updated"); onDone();
+  };
+  return (
+    <div style={{ flexBasis: "100%", marginTop: 6 }}>
+      <div className="ai-form">
+        <label>Name<input className="set-in" maxLength={80} value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} /></label>
+        <label>Can<select className="set-in" value={f.mode} onChange={(e) => setF({ ...f, mode: e.target.value })}><option value="read">Read only</option><option value="propose">Read and propose edits</option></select></label>
+        <label>Expiry<select className="set-in" value={f.expiry} onChange={(e) => setF({ ...f, expiry: e.target.value })}><option value="keep">Keep ({t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "none"})</option><option value="7">7 days from now</option><option value="30">30 days from now</option><option value="90">90 days from now</option><option value="365">1 year from now</option></select></label>
+        <label>Requests per day<input className="set-in" type="number" min={1} max={100000} value={f.daily} onChange={(e) => setF({ ...f, daily: e.target.value })} /></label>
+        <label>Waiting edits at most<input className="set-in" type="number" min={1} max={200} value={f.pend} onChange={(e) => setF({ ...f, pend: e.target.value })} /></label>
+        <label>Only these id prefixes<input className="set-in" value={f.prefixes} onChange={(e) => setF({ ...f, prefixes: e.target.value })} placeholder="all documents" /></label>
+      </div>
+      <label className="meta" style={{ display: "block" }}>Message for this token only (empty: it gets the project message)
+        <textarea className="set-in" style={{ width: "100%", height: 80, padding: 10, resize: "vertical", marginTop: 4 }} maxLength={3500} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
+      </label>
+      <div className="actions">
+        <button type="button" className="btn btn-primary" onClick={() => void save()}>Save changes</button>
+        <button type="button" className="btn" aria-expanded={hist} onClick={() => setHist(!hist)}>Message history ({mine.length})</button>
+        <span className="meta" style={{ margin: 0, alignSelf: "center" }}>The secret itself cannot be changed. Changes apply to the next request.</span>
+      </div>
+      {hist && (mine.length === 0 ? <p className="meta">No saved messages for this token yet.</p> : mine.map((v) => (
+        <div key={v.id} className="ai-tok" style={{ marginBottom: 4 }}><span className="meta" style={{ margin: 0 }}>{ago(v.at)}</span><span style={{ flex: 1, minWidth: 160 }}>{v.body ? v.body.slice(0, 90) + (v.body.length > 90 ? "…" : "") : "(empty)"}</span><button type="button" className="btn" onClick={() => setF({ ...f, note: v.body })}>Use this text</button></div>
+      )))}
+    </div>
+  );
+}
 
 export function AccessView() {
   const { isAdmin, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [project, setProject] = useState<{ id: string; slug: string; name: string; paused: boolean } | null>(null);
   const [guide, setGuide] = useState("");
   const [tokens, setTokens] = useState<TokenRow[]>([]);
+  const [versions, setVersions] = useState<VersionRow[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [editing, setEditing] = useState("");
+  const [showHist, setShowHist] = useState(false);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [err, setErr] = useState("");
   const [f, setF] = useState({ label: "", mode: "read", days: "30", limit: "500", pending: "20", prefixes: "" });
@@ -327,8 +385,13 @@ export function AccessView() {
     if (error || !ps?.[0]) { setErr(error?.message ?? "No project found"); return; }
     const p = { id: ps[0].id as string, slug: ps[0].slug as string, name: ps[0].name as string, paused: !!ps[0].ai_paused };
     setProject(p); setGuide((ps[0].ai_guide as string | null) ?? ""); setErr("");
+    const [vv, ee] = await Promise.all([
+      supabase.from("instruction_versions").select("id,token_id,body,at").eq("project_id", p.id).order("at", { ascending: false }).limit(60),
+      supabase.from("token_events").select("id,token_id,detail,at").eq("project_id", p.id).order("at", { ascending: false }).limit(15)
+    ]);
+    setVersions((vv.data ?? []) as VersionRow[]); setEvents((ee.data ?? []) as EventRow[]);
     const [t, a] = await Promise.all([
-      supabase.from("mcp_tokens").select("id,label,mode,path_prefixes,daily_limit,max_pending,expires_at,revoked_at,last_used_at,last_client,created_at").eq("project_id", p.id).order("created_at", { ascending: false }),
+      supabase.from("mcp_tokens").select("id,label,mode,path_prefixes,daily_limit,max_pending,expires_at,revoked_at,last_used_at,last_client,created_at,ai_note").eq("project_id", p.id).order("created_at", { ascending: false }),
       supabase.rpc("mcp_audit_recent", { p_slug: p.slug, p_limit: 40 })
     ]);
     setTokens((t.data ?? []) as TokenRow[]); setAudit((a.data ?? []) as AuditRow[]);
@@ -416,7 +479,13 @@ export function AccessView() {
       <h2 className="set-h">Message for AI tools</h2>
       <p className="meta">Shown to every AI tool when it calls <span className="mono">get_guide</span>, next to the built-in rules (which documents can be edited and how). Use it for your own rules, for example "only fix typos" or "never touch the Governor chapter".</p>
       <textarea className="set-in" style={{ width: "100%", height: 96, padding: 10, resize: "vertical" }} aria-label="Message for AI tools" maxLength={4000} value={guide} onChange={(e) => setGuide(e.target.value)} />
-      <div className="actions"><button type="button" className="btn" onClick={() => void saveGuide()}>Save message</button></div>
+      <div className="actions">
+        <button type="button" className="btn" onClick={() => void saveGuide()}>Save message</button>
+        <button type="button" className="btn" aria-expanded={showHist} onClick={() => setShowHist(!showHist)}>History ({versions.filter((v) => !v.token_id).length})</button>
+      </div>
+      {showHist && versions.filter((v) => !v.token_id).slice(0, 10).map((v) => (
+        <div key={v.id} className="ai-tok" style={{ marginBottom: 4 }}><span className="meta" style={{ margin: 0 }}>{ago(v.at)}</span><span style={{ flex: 1, minWidth: 160 }}>{v.body ? v.body.slice(0, 90) + (v.body.length > 90 ? "…" : "") : "(empty)"}</span><button type="button" className="btn" onClick={() => setGuide(v.body)}>Use this text</button></div>
+      ))}
       <h2 className="set-h">New token</h2>
       <form onSubmit={create}>
         <div className="ai-form">
@@ -454,10 +523,18 @@ export function AccessView() {
           <b>{t.label}</b><span className={`chip ${state(t) === "Active" ? "ok" : "bad"}`}>{state(t)}</span><span className="chip">{t.mode === "propose" ? "Read + propose" : "Read only"}</span>
           <span className="meta" style={{ margin: 0 }}>{t.last_used_at ? `used ${ago(t.last_used_at)}${t.last_client ? ` by ${t.last_client}` : ""}` : "never used"} · {t.expires_at ? `expires ${new Date(t.expires_at).toLocaleDateString()}` : "no expiry"}{t.path_prefixes.length ? ` · only ${t.path_prefixes.join(", ")}` : ""}</span>
           <span className="sp" />
+          {state(t) === "Active" && <button type="button" className="btn" aria-expanded={editing === t.id} onClick={() => setEditing(editing === t.id ? "" : t.id)}>{editing === t.id ? "Close" : "Edit"}</button>}
           {state(t) === "Active" && <button type="button" className="btn btn-danger" onClick={() => void revoke(t.id)}>Revoke</button>}
           {state(t) !== "Active" && <button type="button" className="btn" onClick={() => void removeTokens([t])}><Trash2 size={14} aria-hidden />Delete</button>}
+          {editing === t.id && <TokenEditor key={t.id + t.ai_note} t={t} versions={versions} ask={ask} onDone={() => { setEditing(""); void load(); }} />}
         </div>
       ))}
+      {events.length > 0 && (<>
+        <h2 className="set-h">Recent token changes</h2>
+        <table className="ai-tbl"><thead><tr><th>When</th><th>Token</th><th>Change</th></tr></thead>
+          <tbody>{events.map((e) => <tr key={e.id}><td>{ago(e.at)}</td><td>{tokens.find((x) => x.id === e.token_id)?.label ?? "deleted token"}</td><td>{Object.entries(e.detail).map(([k, v]) => (Array.isArray(v) ? `${k}: ${showVal(v[0])} → ${showVal(v[1])}` : k === "message" ? "message changed" : k)).join("; ")}</td></tr>)}</tbody>
+        </table>
+      </>)}
       <h2 className="set-h">Recent activity</h2>
       {audit.length === 0 ? <p className="meta">No activity yet.</p> : (
         <table className="ai-tbl"><thead><tr><th>When</th><th>Token</th><th>Tool</th><th>Document</th><th>Result</th></tr></thead>

@@ -17,7 +17,7 @@ function mockState() {
   const d = (id, over) => ({ id, project_id: PID, change_set_id: "s1", doc_ref: "page:a", base_rev: 1, op: "find_replace", rationale: "fix typo", status: "pending", note: null, reject_reason: null, risk_score: 0, risk_flags: [], new_doc: false, result_title: null, applied_rev: null, reverted_at: null, created_at: new Date().toISOString(), decided_at: null, ...over });
   return {
     admin: true, calls: [], paused: false,
-    tokens: [{ id: "tk-old", label: "Old revoked token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() + 86400000).toISOString(), revoked_at: new Date().toISOString(), last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 5).toISOString() }, { id: "tk-old2", label: "Old expired token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() - 86400000).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 9).toISOString() }],
+    tokens: [{ id: "tk-act", label: "Active token A", mode: "read", path_prefixes: ["crate:"], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() + 86400000 * 10).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date().toISOString(), ai_note: "" }, { id: "tk-old", label: "Old revoked token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() + 86400000).toISOString(), revoked_at: new Date().toISOString(), last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 5).toISOString() }, { id: "tk-old2", label: "Old expired token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() - 86400000).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 9).toISOString() }],
     trashSets: [{ id: "t1", title: "Trashed edit set", client: "Google", deleted_at: new Date(Date.now() - 86400000 * 2).toISOString(), purge_after: new Date(Date.now() + 86400000 * 28).toISOString(), doc_drafts: [{ id: "x1" }] }],
     trashPages: [{ id: "tp1", ref: "page:old", kind: "page", title: "Trashed page", deleted_at: new Date(Date.now() - 86400000).toISOString(), purge_after: new Date(Date.now() + 86400000 * 29).toISOString() }],
     log: [{ id: 3, item_type: "token", item_id: "x", title: "Deleted token A", action: "purged", at: new Date(Date.now() - 3600000).toISOString() }, { id: 2, item_type: "edit", item_id: "t1", title: "Trashed edit set", action: "trashed", at: new Date(Date.now() - 86400000 * 2).toISOString() }],
@@ -60,6 +60,8 @@ async function setup(st) {
   await page.route("**/rest/v1/rpc/trash_pages", (r) => { const b = r.request().postDataJSON(); st.calls.push(["trash-pages", b.p_ids]); return send(r, { done: b.p_ids, refused: [] }); });
   await page.route("**/rest/v1/rpc/restore_pages", (r) => { const b = r.request().postDataJSON(); st.calls.push(["restore-pages", b.p_ids]); st.trashPages = st.trashPages.filter((x) => !b.p_ids.includes(x.id)); return send(r, { done: b.p_ids }); });
   await page.route("**/rest/v1/trash_log*", (r) => send(r, st.log));
+  await page.route("**/rest/v1/instruction_versions*", (r) => send(r, [{ id: 1, token_id: null, body: "Project rule A", at: new Date().toISOString() }, { id: 2, token_id: "tk-act", body: "Old token note", at: new Date().toISOString() }]));
+  await page.route("**/rest/v1/token_events*", (r) => send(r, [{ id: 1, token_id: "tk-act", detail: { daily_limit: [50, 100], message: true }, at: new Date().toISOString() }]));
   await page.route("**/rest/v1/docs*", (r) => {
     const req = r.request(), u = req.url();
     if (req.method() === "DELETE") { const ids = (decodeURIComponent(u).match(/id=in\.\(([^)]*)\)/)?.[1] ?? "").split(",").filter(Boolean); st.calls.push(["purge-pages", ids]); st.trashPages = st.trashPages.filter((x) => !ids.includes(x.id)); return send(r, ids.map((id) => ({ id }))); }
@@ -166,7 +168,7 @@ ok("access: test button reports the tools", /Works: 2 tools/.test(await text(p, 
 ok("access: create sent mode, ttl and limits", st.calls.some((c) => c[0] === "create" && c[1].p_mode === "read" && c[1].p_ttl_days === 30 && c[1].p_label === "Gemini phone"));
 await p.click('button:has-text("I saved it")');
 ok("access: secret gone after dismissing", (await p.locator(".ai-secret").count()) === 0 && !(await p.evaluate(() => document.body.textContent)).includes("abababababab"));
-ok("access: token and activity lists", /Gemini phone/.test(await text(p, ".col")) && /read_doc/.test(await text(p, ".ai-tbl")));
+ok("access: token and activity lists", /Gemini phone/.test(await text(p, ".col")) && /read_doc/.test(await text(p, ".col")));
 ok("access: owner message loaded", (await p.inputValue('textarea[aria-label="Message for AI tools"]')) === "Only fix typos.");
 await p.fill('textarea[aria-label="Message for AI tools"]', "Never edit chapter 3."); await p.click('button:has-text("Save message")'); await p.waitForTimeout(300);
 ok("access: owner message saved", st.calls.some((c) => c[0] === "pause" && c[1].ai_guide === "Never edit chapter 3."));
@@ -263,6 +265,32 @@ await p.goto(`${base}?gftest#/pages/page%3Anotes`, { waitUntil: "networkidle" })
 await p.click('button:has-text("Move to Trash")'); await p.waitForTimeout(500);
 ok("pages: Move to Trash calls the function and shows Undo", st.calls.some((c) => c[0] === "trash-pages" && c[1].join() === "dd1") && /Trash/.test(await text(p, ".toast")));
 ok("no page errors in trash flows", p.errs.length === 0, p.errs.join("|"));
+await p.context().close();
+
+// 6d. edit a token in place
+st = mockState(); p = await setup(st);
+await p.goto(`${base}?gftest#/access`, { waitUntil: "networkidle" }); await p.waitForSelector(".ai-tok");
+ok("access: recent token changes are listed", /daily_limit: 50 → 100/.test(await text(p, ".ai-tbl")) && /message changed/.test(await text(p, ".col")));
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Edit")').click(); await p.waitForSelector('textarea[aria-label], .ai-form');
+await p.fill('.ai-tok:has-text("Active token A") .ai-form input >> nth=0', "Renamed token");
+await p.fill('.ai-tok:has-text("Active token A") textarea', "Only fix typos for this token.");
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Save changes")').click(); await p.waitForTimeout(400);
+ok("access: saving sends only the changed fields, without a confirmation for a harmless change", st.calls.some((c) => c[0] === "tokpatch" && c[1].label === "Renamed token" && c[1].ai_note === "Only fix typos for this token." && !("mode" in c[1]) && !("token_hash" in c[1])));
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Edit")').click().catch(() => {});
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Edit"), .ai-tok:has-text("Active token A") button:has-text("Close")').first().click().catch(() => {}); await p.waitForTimeout(200);
+if (!(await p.locator('.ai-tok:has-text("Active token A") .ai-form').count())) await p.locator('.ai-tok:has-text("Active token A") button:has-text("Edit")').click();
+await p.selectOption('.ai-tok:has-text("Active token A") .ai-form select >> nth=0', "propose");
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Save changes")').click(); await p.waitForSelector("dialog[open]");
+ok("access: giving a token more access asks first", /more access/.test(await text(p, "dialog[open]")) && !st.calls.some((c) => c[0] === "tokpatch" && c[1].mode === "propose"));
+await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(200);
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Save changes")').click(); await p.waitForSelector("dialog[open]"); await p.click('dialog[open] button:has-text("Save changes")'); await p.waitForTimeout(400);
+ok("access: confirmed widening is saved", st.calls.some((c) => c[0] === "tokpatch" && c[1].mode === "propose"));
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Edit")').click().catch(() => {}); 
+await p.locator('.ai-tok:has-text("Active token A") button:has-text("Message history")').click().catch(() => {});
+ok("access: project message history lists versions", (await p.locator('button:text-is("History (1)")').count()) === 1);
+await p.click('button:has-text("History (1)")'); await p.locator('.ai-tok:has-text("Project rule A") button:has-text("Use this text")').click();
+ok("access: restoring a version fills the message box", (await p.inputValue('textarea[aria-label="Message for AI tools"]')) === "Project rule A");
+ok("no page errors editing tokens", p.errs.length === 0, p.errs.join("|"));
 await p.context().close();
 
 // 7. not an admin
