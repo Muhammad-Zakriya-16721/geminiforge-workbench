@@ -59,7 +59,7 @@ async function setup(st) {
     return send(r, res);
   });
   await page.route("**/rest/v1/rpc/revert_draft", (r) => { const b = r.request().postDataJSON(); st.calls.push(["revert", b]); const x = st.sets.flatMap((s) => s.doc_drafts).find((y) => y.id === b.p_id); if (x) x.reverted_at = new Date().toISOString(); return send(r, "reverted"); });
-  await page.route("**/rest/v1/projects*", async (r) => { if (r.request().method() === "PATCH") { st.calls.push(["pause", r.request().postDataJSON()]); st.paused = r.request().postDataJSON().ai_paused; return r.fulfill({ status: 204, body: "" }); } return send(r, [{ id: PID, slug: "demo", name: "Demo docs", ai_paused: st.paused }]); });
+  await page.route("**/rest/v1/projects*", async (r) => { if (r.request().method() === "PATCH") { st.calls.push(["pause", r.request().postDataJSON()]); st.paused = r.request().postDataJSON().ai_paused; return r.fulfill({ status: 204, body: "" }); } return send(r, [{ id: PID, slug: "demo", name: "Demo docs", ai_paused: st.paused, ai_guide: "Only fix typos." }]); });
   await page.route("**/rest/v1/mcp_tokens*", async (r) => { const m = r.request().method(); if (m === "PATCH") { st.calls.push(["tokpatch", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); } return send(r, st.tokens); });
   await page.route("**/rest/v1/rpc/create_mcp_token", (r) => { const b = r.request().postDataJSON(); st.calls.push(["create", b]); st.tokens.unshift({ id: "t1", label: b.p_label, mode: b.p_mode, path_prefixes: b.p_prefixes, daily_limit: b.p_daily_limit, max_pending: 20, expires_at: new Date(Date.now() + 86400000 * 30).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date().toISOString() }); return send(r, "dk_" + "ab".repeat(32)); });
   await page.route("**/rest/v1/rpc/mcp_audit_recent", (r) => send(r, [{ ts: new Date().toISOString(), token_label: "Gemini phone", tool: "read_doc", ref: "page:a", status: "ok" }]));
@@ -125,6 +125,9 @@ ok("access: create sent mode, ttl and limits", st.calls.some((c) => c[0] === "cr
 await p.click('button:has-text("I saved it")');
 ok("access: secret gone after dismissing", (await p.locator(".ai-secret").count()) === 0 && !(await p.evaluate(() => document.body.textContent)).includes("abababababab"));
 ok("access: token and activity lists", /Gemini phone/.test(await text(p, ".col")) && /read_doc/.test(await text(p, ".ai-tbl")));
+ok("access: owner message loaded", (await p.inputValue('textarea[aria-label="Message for AI tools"]')) === "Only fix typos.");
+await p.fill('textarea[aria-label="Message for AI tools"]', "Never edit chapter 3."); await p.click('button:has-text("Save message")'); await p.waitForTimeout(300);
+ok("access: owner message saved", st.calls.some((c) => c[0] === "pause" && c[1].ai_guide === "Never edit chapter 3."));
 await p.click('button:has-text("Pause AI access")'); await p.waitForTimeout(400);
 ok("access: pause sends ai_paused", st.calls.some((c) => c[0] === "pause" && c[1].ai_paused === true));
 await p.addScriptTag({ content: axeSrc });

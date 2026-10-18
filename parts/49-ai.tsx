@@ -268,6 +268,7 @@ interface AuditRow { ts: string; token_label: string | null; tool: string; ref: 
 export function AccessView() {
   const { isAdmin, notify, cloudState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, notify: s.notify, cloudState: s.cloudState })));
   const [project, setProject] = useState<{ id: string; slug: string; name: string; paused: boolean } | null>(null);
+  const [guide, setGuide] = useState("");
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [err, setErr] = useState("");
@@ -280,10 +281,10 @@ export function AccessView() {
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data: ps, error } = await supabase.from("projects").select("id,slug,name,ai_paused").order("created_at").limit(1);
+    const { data: ps, error } = await supabase.from("projects").select("id,slug,name,ai_paused,ai_guide").order("created_at").limit(1);
     if (error || !ps?.[0]) { setErr(error?.message ?? "No project found"); return; }
     const p = { id: ps[0].id as string, slug: ps[0].slug as string, name: ps[0].name as string, paused: !!ps[0].ai_paused };
-    setProject(p); setErr("");
+    setProject(p); setGuide((ps[0].ai_guide as string | null) ?? ""); setErr("");
     const [t, a] = await Promise.all([
       supabase.from("mcp_tokens").select("id,label,mode,path_prefixes,daily_limit,max_pending,expires_at,revoked_at,last_used_at,last_client,created_at").eq("project_id", p.id).order("created_at", { ascending: false }),
       supabase.rpc("mcp_audit_recent", { p_slug: p.slug, p_limit: 40 })
@@ -314,6 +315,11 @@ export function AccessView() {
     if (!supabase || !project) return;
     const { error } = await supabase.from("projects").update({ ai_paused: !project.paused }).eq("id", project.id);
     notify(error ? error.message : project.paused ? "AI access resumed" : "AI access paused"); await load();
+  };
+  const saveGuide = async () => {
+    if (!supabase || !project) return;
+    const { error } = await supabase.from("projects").update({ ai_guide: guide.trim() }).eq("id", project.id);
+    notify(error ? error.message : "Message saved. AI tools read it when they call get_guide");
   };
   const runTest = async () => {
     setTest("Testing…");
@@ -350,6 +356,10 @@ export function AccessView() {
           {project.paused && <span className="chip bad">Paused: tokens are refused</span>}
         </div>
       )}
+      <h2 className="set-h">Message for AI tools</h2>
+      <p className="meta">Shown to every AI tool when it calls <span className="mono">get_guide</span>, next to the built-in rules (which documents can be edited and how). Use it for your own rules, for example "only fix typos" or "never touch the Governor chapter".</p>
+      <textarea className="set-in" style={{ width: "100%", height: 96, padding: 10, resize: "vertical" }} aria-label="Message for AI tools" maxLength={4000} value={guide} onChange={(e) => setGuide(e.target.value)} />
+      <div className="actions"><button type="button" className="btn" onClick={() => void saveGuide()}>Save message</button></div>
       <h2 className="set-h">New token</h2>
       <form onSubmit={create}>
         <div className="ai-form">
