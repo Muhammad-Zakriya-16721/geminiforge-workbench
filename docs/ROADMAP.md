@@ -31,7 +31,7 @@ Research behind this plan: four read-only research reports (Supabase Realtime; t
 
 ## 3. Phases
 
-STATUS (2026-10-18): Phases 1, 2, 3 and 4 (edit/message/log parts) are DONE and tested (qa-ai 73/73). Phase 4 leftovers: audit v2 (store error text), shorter get_guide, token prefix/checksum, rotation, path-token kind, tools/list cache. Phases 5-8 not started.
+STATUS (2026-10-18, round 17): Phases 1-4 DONE. Round 17 also shipped: retention job (pg_cron), clear activity, audit v2 (error text), injection-phrase risk flag, gate/limit fixes, RLS hardening (0011, 0012), UI audit fixes, backup + llms.txt export, access checks, AI-edited trail in chapters, page import/export/tables. NOT STARTED: Phase 5 (projects switcher, direct owner editor for generated pages), Phase 7 (ask-the-docs, needs OpenRouter keys as a Supabase secret), rest of Phase 6 and 8. Open decisions are listed in the last message of round 17.
 
 ### Phase 1: live updates without a visible reload (small, high value)
 1. Remove `key={contentRev}`. Make components re-render from the store instead of remounting; memoise heavy parts on `id + updated_at`. Keep the scroll restore as a safety net.

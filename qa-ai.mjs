@@ -73,7 +73,7 @@ async function setup(st) {
     if (/source=eq.native/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString() }]);
     return send(r, [{ ref: "page:a", title: "Alpha page" }, { ref: "page:b", title: "Beta page" }]);
   });
-  await page.route("**/rest/v1/doc_revisions*", (r) => { const u = r.request().url(); if (/select=rev%2Ckind/.test(u)) return send(r, [{ rev: 3, kind: "ai", created_at: new Date().toISOString(), title: "Notes page" }, { rev: 2, kind: "edit", created_at: new Date().toISOString(), title: "Notes page" }, { rev: 1, kind: "ai", created_at: new Date().toISOString(), title: "Notes page" }]); return send(r, [{ body: BASE_TEXT, title: "Alpha page" }]); });
+  await page.route("**/rest/v1/doc_revisions*", (r) => { const u = r.request().url(); if (/select=ref%2Ckind%2Crev/.test(u)) return send(r, [{ ref: "chapter:overview#sec-overview-pillars", kind: "ai", rev: 4, created_at: new Date().toISOString() }, { ref: "chapter:overview#sec-overview-artifacts", kind: "ai", rev: 3, created_at: new Date(Date.now() - 86400000).toISOString() }, { ref: "chapter:overview#sec-overview-artifacts", kind: "revert", rev: 2, created_at: new Date(Date.now() - 2 * 86400000).toISOString() }]); if (/select=rev%2Ckind/.test(u)) return send(r, [{ rev: 3, kind: "ai", created_at: new Date().toISOString(), title: "Notes page" }, { rev: 2, kind: "edit", created_at: new Date().toISOString(), title: "Notes page" }, { rev: 1, kind: "ai", created_at: new Date().toISOString(), title: "Notes page" }]); return send(r, [{ body: BASE_TEXT, title: "Alpha page" }]); });
   await page.route("**/rest/v1/rpc/decide_drafts", async (r) => {
     const b = r.request().postDataJSON(); st.calls.push(["decide", b]);
     const res = b.p_ids.map((id) => { const x = st.sets.flatMap((s) => s.doc_drafts).find((y) => y.id === id); if (x && x.status === "pending") { x.status = b.p_approve ? "applied" : "rejected"; x.reject_reason = b.p_reason; x.applied_rev = 2; } return { id, status: x?.status }; });
@@ -229,6 +229,8 @@ st = mockState(); p = await setup(st);
 await p.goto(`${base}?gftest#/chapter/overview`, { waitUntil: "networkidle" }); await p.waitForTimeout(500);
 await p.evaluate(() => window.__gf.store.setState({ highlight: "Meet the GeminiForge V20 Architecture." })); await p.waitForTimeout(900);
 ok("chapter: the passage from an edit is highlighted after opening the page", (await p.evaluate(() => CSS.highlights.get("gf-passage")?.size ?? 0)) === 1 && (await p.evaluate(() => window.__gf.store.getState().highlight)) === "");
+ok("chapter: an accepted AI edit is flagged in the chapter", /AI edited/.test(await text(p, ".doc")) && /2 sections/.test(await text(p, ".doc")), await text(p, ".doc").then((t) => t.slice(0, 160)));
+await p.click('button:has-text("Show which")'); ok("chapter: the touched sections are listed", /sec-overview-pillars/.test(await text(p, ".doc")));
 await p.context().close();
 
 // 6c. trash

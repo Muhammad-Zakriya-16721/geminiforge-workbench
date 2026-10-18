@@ -163,3 +163,13 @@ RESEARCH SUMMARY and the phased plan: docs/ROADMAP.md (Phases 1-8, problems E1-E
 - Tests: qa-ai 73/73, qa-content 12/12, prodcheck 101/101, Canvas final build ok.
 - Edge Function core.mjs not redeployed (not needed; mcp_guide is SQL).
 - Never run live: permanent delete via REST under RLS and token delete (user should try with real login). Test tokens to revoke: "Test 2" and e2e ones.
+
+## ROUND 17 (2026-10-18) audit + hardening + owner tools
+- Confirm dialog centered (class cf). Permanent page delete was verified in the live DB (trash_log shows 'purged', row gone).
+- Migrations (all applied live, files in repo): 0011_retention.sql (pg_cron job gf-purge daily 03:17 UTC -> private.purge_expired; public.purge_trash(); public.clear_activity(slug, days); public.mcp_audit_log with detail; mcp_fail stores hint; risk flag injection_phrases), 0012_hardening.sql (mcp_gate per-address limits first, docs delete policy only for trashed pages, doc_revisions hidden for trashed pages for non-editors, bad_chars blocks zero-width/variation selectors but ALLOWS ZWNJ/ZWJ (Urdu/Persian/emoji), apply_draft checks the generated page equals the reviewed text, revert_draft row locks, idempotency keys scoped per token, anon table privileges reduced to SELECT).
+- Edge Function docs-mcp is now v5 (clean() list, closing tag never cut, kind cleaned).
+- SQL tool gotchas: DROP statements hang the tool (use create or replace / new names / alter policy); `delete from` inside a created function is fine; patch existing functions with a DO block that replace()s inside pg_get_functiondef text and execute()s it.
+- Audit findings NOT fixed (decisions for the owner): path tokens appear in Supabase logs (E7; use Bearer header clients, short expiry); trashed pages with an applied AI edit are purged after 30 days (the user trashed them); leaked-password protection is off (Auth setting); `private.apply_draft`/`derived_edit` still granted to authenticated (not reachable via the API; not revoked because decide_drafts calls them); idempotency/pending-cap races remain (count-then-insert).
+- UI: review inbox confirms Accept all (when high risk) and Reject all; Show older; next-card focus after a decision; busy guard; peek has Accept/Reject; admin gate shows Loading; guide box no longer overwritten by live reload; Revoke/Revoke all use the confirm dialog; Trash auto-purge is server side.
+- New: backup JSON + llms.txt download (AI access page), Checks list, tab title "(n)", "new since last visit" line, "AI edited" trail in chapters (owner only), pages: import .md, download .md, tables, save refuses when the page changed.
+- Tests: qa-ai 92/92, qa-content 12/12, prodcheck 101/101, Canvas build ok, mcp-e2e 13/13 (live).

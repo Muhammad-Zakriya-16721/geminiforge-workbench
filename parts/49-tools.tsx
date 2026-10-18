@@ -72,4 +72,30 @@ function useTitleBadge() {
     return () => { off(); document.title = base; };
   }, []);
 }
+
+// owner only: shows where an accepted AI edit changed this chapter (the newest version of each section is still the AI's, not undone or overwritten)
+function AiTrail({ prefix }: { prefix: string }) {
+  const { isAdmin, liveTick, go } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, liveTick: s.liveTick, go: s.go })));
+  const [rows, setRows] = useState<{ ref: string; at: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!isAdmin || !supabase) { setRows([]); return; }
+    let off = false;
+    void supabase.from("doc_revisions").select("ref,kind,rev,created_at").or(`ref.eq.${prefix},ref.like.${prefix}#%`).in("kind", ["ai", "revert", "edit"]).order("created_at", { ascending: false }).limit(60)
+      .then(({ data, error }) => {
+        if (off || error) return;
+        const seen = new Set<string>(); const out: { ref: string; at: string }[] = [];
+        for (const r of (data ?? []) as { ref: string; kind: string; created_at: string }[]) { if (seen.has(r.ref)) continue; seen.add(r.ref); if (r.kind === "ai") out.push({ ref: r.ref, at: r.created_at }); }
+        setRows(out);
+      });
+    return () => { off = true; };
+  }, [isAdmin, prefix, liveTick]);
+  if (rows.length === 0) return null;
+  return (
+    <div className="blk" style={{ fontFamily: "var(--sans)", margin: "0 0 14px" }}>
+      <p className="meta" style={{ margin: 0 }}><span className="chip warn">AI edited</span> {rows.length} section{rows.length === 1 ? "" : "s"} here {rows.length === 1 ? "holds" : "hold"} an accepted AI edit (latest {ago(rows[0].at)}). <button type="button" className="btn btn-ghost" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Show which"}</button></p>
+      {open && <ul className="ai-checks">{rows.map((r) => <li key={r.ref}><button type="button" className="btn btn-ghost" onClick={() => { const [c, sec] = r.ref.replace(/^chapter:/, "").split("#"); go({ kind: "chapter", id: c as ChapterId, sec: sec || undefined }); }}>{r.ref}</button> <span className="meta">{ago(r.at)}</span></li>)}</ul>}
+    </div>
+  );
+}
 // #endregion

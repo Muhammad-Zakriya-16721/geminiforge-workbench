@@ -194,7 +194,8 @@ export default function App() {
           {view.kind !== "home" && (
             <div className="dock">
               {far && <button type="button" className="stb" aria-label="Scroll to bottom" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: reduced ? "auto" : "smooth" })}><ChevronDown size={17} aria-hidden /></button>}
-              <Composer placeholder="Ask a question, or type / for commands" onSubmit={submit} />
+              {/* the review screens have no question box: starting a thread there would navigate away in the middle of a review */}
+              {view.kind !== "inbox" && view.kind !== "trash" && view.kind !== "access" && <Composer placeholder="Ask a question, or type / for commands" onSubmit={submit} />}
             </div>
           )}
         </div>

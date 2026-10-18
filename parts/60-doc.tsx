@@ -227,6 +227,7 @@ export function Doc({ chapter }: { chapter: ChapterId }) {
   return (
     <div className="doc">
       <span id={`sec-${chapter}-top`} />
+      <AiTrail prefix={`chapter:${chapter}`} />
       {blocks.map((b, i) => {
         switch (b.t) {
           case "badge": return <p key={i} className="kicker">{b.text}</p>;
