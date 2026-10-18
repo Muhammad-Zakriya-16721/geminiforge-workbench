@@ -71,13 +71,13 @@ export function PagesView({ refId }: { refId?: string }) {
 
   const loadList = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at").eq("source", "native").order("updated_at", { ascending: false }).limit(200);
+    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at").eq("source", "native").is("deleted_at", null).order("updated_at", { ascending: false }).limit(200);
     if (error) { setErr(error.message); return; }
     setErr(""); setRows((data ?? []) as PageRow[]);
   }, []);
   const loadPage = useCallback(async (r: string) => {
     if (!supabase) return;
-    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at,body").eq("source", "native").eq("ref", r).maybeSingle();
+    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at,body").eq("source", "native").is("deleted_at", null).eq("ref", r).maybeSingle();
     if (error) { setErr(error.message); return; }
     setErr(""); setPage((data as PageRow | null) ?? null); setEditing(false);
     if (data) {
@@ -102,6 +102,15 @@ export function PagesView({ refId }: { refId?: string }) {
     const r = await supabase.from("docs").update({ body: data.body, title: data.title }).eq("id", page.id);
     notify(r.error ? r.error.message : `Version ${rev} restored as a new version`); await loadPage(page.ref);
   };
+  const trashPage = async () => {
+    if (!supabase || !page) return;
+    const id = page.id;
+    const { data, error } = await supabase.rpc("trash_pages", { p_ids: [id] });
+    const r = data as { done: string[]; refused: { reason: string }[] } | null;
+    if (error || !r?.done.length) { notify(error?.message ?? r?.refused[0]?.reason ?? "Could not move it"); return; }
+    notify("Page moved to the Trash", () => { void supabase!.rpc("restore_pages", { p_ids: [id] }).then(() => { void refreshAi(); }); });
+    void refreshAi(); go({ kind: "pages" });
+  };
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) return;
@@ -110,7 +119,7 @@ export function PagesView({ refId }: { refId?: string }) {
     const { data: ps } = await supabase.from("projects").select("id").order("created_at").limit(1);
     if (!ps?.[0]) { notify("No project found"); return; }
     const { error } = await supabase.from("docs").insert({ project_id: ps[0].id, ref: `page:${slug}`, kind: "page", title: newTitle.trim(), body: "", source: "native" });
-    if (error) { notify(error.code === "23505" ? "A page with that name already exists" : error.message); return; }
+    if (error) { notify(error.code === "23505" ? "A page with that name already exists (it may be in the Trash)" : error.message); return; }
     setNewTitle(""); go({ kind: "pages", ref: `page:${slug}` });
   };
 
@@ -153,6 +162,7 @@ export function PagesView({ refId }: { refId?: string }) {
             {editing && <button type="button" className="btn btn-primary" onClick={() => void save()}>Save</button>}
             {editing && <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>}
             <button type="button" className="btn btn-ghost" onClick={async () => notify((await copyText(page.body ?? "")) ? "Copied as Markdown" : "Could not copy")}><Copy size={14} aria-hidden />Copy Markdown</button>
+            <button type="button" className="btn btn-ghost" onClick={() => void trashPage()}><Trash2 size={14} aria-hidden />Move to Trash</button>
           </div>
           {editing ? (
             <>

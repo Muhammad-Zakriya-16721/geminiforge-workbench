@@ -49,12 +49,16 @@ export async function refreshAi(): Promise<void> {
   try {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
-    if (!uid) { useStore.setState({ isAdmin: false, inboxCount: 0 }); stopLive(); return; }
+    if (!uid) { useStore.setState({ isAdmin: false, inboxCount: 0, trashCount: 0 }); stopLive(); return; }
     const { data: a } = await supabase.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
     if (!a) { useStore.setState({ isAdmin: false, inboxCount: 0 }); stopLive(); return; }
     const { count } = await supabase.from("doc_drafts").select("id", { count: "exact", head: true }).eq("status", "pending");
+    const [te, tp] = await Promise.all([
+      supabase.from("change_sets").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
+      supabase.from("docs").select("id", { count: "exact", head: true }).eq("source", "native").not("deleted_at", "is", null)
+    ]);
     const changed = useStore.getState().inboxCount !== (count ?? 0);
-    useStore.setState((s) => ({ isAdmin: true, inboxCount: count ?? 0, liveTick: changed ? s.liveTick + 1 : s.liveTick }));
+    useStore.setState((s) => ({ isAdmin: true, inboxCount: count ?? 0, trashCount: (te.count ?? 0) + (tp.count ?? 0), liveTick: changed ? s.liveTick + 1 : s.liveTick }));
     startLive();
   } catch { /* keep the last known state */ }
 }
@@ -164,13 +168,14 @@ export function InboxView() {
   const [filter, setFilter] = useState<"pending" | "done" | "all">("pending");
   const [sel, setSel] = useState("");
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const els = useRef<Record<string, HTMLDivElement | null>>({});
 
   const load = useCallback(async () => {
     if (!supabase) return;
     const { data, error } = await supabase.from("change_sets")
       .select("id,project_id,title,summary,client,created_at,doc_drafts(id,project_id,change_set_id,doc_ref,base_rev,op,rationale,status,note,reject_reason,risk_score,risk_flags,new_doc,result_title,applied_rev,reverted_at,created_at,decided_at)")
-      .order("created_at", { ascending: false }).limit(60);
+      .is("deleted_at", null).order("created_at", { ascending: false }).limit(60);
     if (error) { setErr(error.message); return; }
     setErr("");
     const rows = (data ?? []) as unknown as SetRow[];
@@ -205,6 +210,20 @@ export function InboxView() {
     await load(); void refreshAi();
   }, [notify, load]);
 
+  // a set can go to the Trash when nothing in it waits for a decision and nothing accepted is still in force
+  const removable = (s: SetRow) => s.doc_drafts.every((d) => d.status !== "pending" && !((d.status === "applied" || d.status === "approved") && !d.reverted_at));
+  const keptAsHistory = (s: SetRow) => s.doc_drafts.some((d) => (d.status === "applied" || d.status === "approved") && !d.reverted_at);
+  const trashSets = useCallback(async (ids: string[]) => {
+    if (!supabase || ids.length === 0) return;
+    const { data, error } = await supabase.rpc("trash_edits", { p_ids: ids });
+    if (error) { notify(error.message); return; }
+    const r = data as { done: string[]; refused: { reason: string }[] };
+    setPicked(new Set());
+    notify(r.done.length ? `${r.done.length} moved to the Trash${r.refused.length ? `, ${r.refused.length} kept (${r.refused[0].reason})` : ""}` : (r.refused[0]?.reason ?? "Nothing moved"),
+      r.done.length ? () => { void supabase!.rpc("restore_edits", { p_ids: r.done }).then(() => { void load(); void refreshAi(); }); } : undefined);
+    await load(); void refreshAi();
+  }, [notify, load]);
+
   const shown = useMemo(() => (sets ?? []).map((s) => ({ ...s, doc_drafts: s.doc_drafts.filter((d) => filter === "all" || (filter === "pending" ? d.status === "pending" : d.status !== "pending")).sort((a, b) => b.risk_score - a.risk_score) })).filter((s) => s.doc_drafts.length > 0), [sets, filter]);
   const flat = useMemo(() => shown.flatMap((s) => s.doc_drafts.map((d) => d.id)), [shown]);
   const pendingTotal = (sets ?? []).reduce((n, s) => n + s.doc_drafts.filter((d) => d.status === "pending").length, 0);
@@ -236,6 +255,9 @@ export function InboxView() {
           <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All</button>
         </div>
         <span className="sp" />
+        {filter !== "pending" && shown.some(removable) && <button type="button" className="btn" onClick={() => setPicked(new Set(shown.filter(removable).map((s) => s.id)))}>Select all removable</button>}
+        {picked.size > 0 && <button type="button" className="btn btn-danger" onClick={() => void trashSets([...picked])}><Trash2 size={14} aria-hidden />Move {picked.size} to Trash</button>}
+        {picked.size > 0 && <button type="button" className="btn btn-ghost" onClick={() => setPicked(new Set())}>Clear</button>}
         <LiveDot state={liveState} />
         <button type="button" className="btn" onClick={() => void load()}><RefreshCw size={14} aria-hidden />Refresh</button>
       </div>
@@ -250,7 +272,9 @@ export function InboxView() {
           return (
             <section key={s.id} className="ai-set" aria-label={s.title}>
               <div className="ai-set-h">
+                {removable(s) && <input type="checkbox" aria-label={`Select ${s.title}`} checked={picked.has(s.id)} onChange={() => setPicked((x) => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n; })} />}
                 <span className="ai-set-t">{s.title}</span>
+                {keptAsHistory(s) && <span className="chip" title="Accepted edits are kept as history. Undo them first to be able to delete the set.">Kept as history</span>}
                 <span className="meta" style={{ margin: 0 }}>{s.client ? `${s.client} · ` : ""}{ago(s.created_at)} · {s.doc_drafts.length} edit{s.doc_drafts.length === 1 ? "" : "s"}</span>
               </div>
               {s.summary && <p className="meta">{s.summary}</p>}
@@ -285,6 +309,7 @@ export function AccessView() {
   const [tab, setTab] = useState<"gemini" | "claude" | "cursor" | "curl">("gemini");
   const [test, setTest] = useState("");
   const [busy, setBusy] = useState(false);
+  const { ask, node: confirmNode } = useConfirm();
   const base = `${SB_URL ?? ""}/functions/v1/docs-mcp`;
 
   const load = useCallback(async () => {
@@ -313,6 +338,20 @@ export function AccessView() {
     if (row) await supabase.from("mcp_tokens").update({ max_pending: Math.min(200, Math.max(1, Number(f.pending) || 20)) }).eq("id", row.id);
     setSecret(data); setF({ ...f, label: "" }); setBusy(false);
     await load();
+  };
+  const isDead = (t: TokenRow) => !!t.revoked_at || (!!t.expires_at && new Date(t.expires_at) < new Date());
+  const removeTokens = async (list: TokenRow[]) => {
+    if (!supabase || list.length === 0) return;
+    const one = list.length === 1;
+    const ok = await ask({
+      title: one ? "Delete this token for good?" : `Delete ${list.length} tokens for good?`,
+      body: <>{one ? <>“{list[0].label}” stops being listed and can never be restored.</> : <>{list.length} revoked or expired tokens will be removed from the list and can never be restored.</>} Their activity stays in the log. This cannot be undone.</>,
+      confirmLabel: "Delete token" + (one ? "" : "s"), danger: true, type: one ? undefined : "DELETE"
+    });
+    if (!ok) return;
+    const { data, error } = await supabase.from("mcp_tokens").delete().in("id", list.map((t) => t.id)).select("id");
+    notify(error ? error.message : (data?.length ?? 0) === list.length ? "Deleted" : `${data?.length ?? 0} of ${list.length} deleted`);
+    await load(); void refreshAi();
   };
   const revoke = async (id: string) => { if (!supabase) return; const { error } = await supabase.from("mcp_tokens").update({ revoked_at: new Date().toISOString() }).eq("id", id); notify(error ? error.message : "Token revoked"); await load(); };
   const revokeAll = async () => {
@@ -398,7 +437,8 @@ export function AccessView() {
           {tab === "gemini" && <p className="meta">This puts the token inside the address, because the Gemini app cannot send headers. Treat the address like a password and use a read-only token with a short expiry.</p>}
         </div>
       )}
-      <h2 className="set-h">Tokens</h2>
+      {confirmNode}
+      <h2 className="set-h">Tokens{tokens.some(isDead) && <button type="button" className="btn btn-danger" onClick={() => void removeTokens(tokens.filter(isDead))}>Clear revoked and expired ({tokens.filter(isDead).length})</button>}</h2>
       {tokens.length === 0 && <p className="meta">No tokens yet.</p>}
       {tokens.map((t) => (
         <div key={t.id} className="ai-tok">
@@ -406,6 +446,7 @@ export function AccessView() {
           <span className="meta" style={{ margin: 0 }}>{t.last_used_at ? `used ${ago(t.last_used_at)}${t.last_client ? ` by ${t.last_client}` : ""}` : "never used"} · {t.expires_at ? `expires ${new Date(t.expires_at).toLocaleDateString()}` : "no expiry"}{t.path_prefixes.length ? ` · only ${t.path_prefixes.join(", ")}` : ""}</span>
           <span className="sp" />
           {state(t) === "Active" && <button type="button" className="btn btn-danger" onClick={() => void revoke(t.id)}>Revoke</button>}
+          {state(t) !== "Active" && <button type="button" className="btn" onClick={() => void removeTokens([t])}><Trash2 size={14} aria-hidden />Delete</button>}
         </div>
       ))}
       <h2 className="set-h">Recent activity</h2>

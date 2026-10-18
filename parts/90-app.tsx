@@ -173,6 +173,7 @@ export default function App() {
               {view.kind === "audit" && <AuditView />}
               {view.kind === "pages" && <PagesView refId={view.ref} />}
               {view.kind === "inbox" && <InboxView />}
+              {view.kind === "trash" && <TrashView />}
               {view.kind === "access" && <AccessView />}
             </ErrorBoundary>
           </div>

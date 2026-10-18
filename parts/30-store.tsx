@@ -42,7 +42,7 @@ const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 function sanitizeView(v: unknown): View {
   if (isObj(v) && v.kind === "chapter" && isStr(v.id) && chapterIds().includes(v.id as ChapterId)) return { kind: "chapter", id: v.id as ChapterId };
   if (isObj(v) && v.kind === "thread" && isStr(v.id)) return { kind: "thread", id: v.id };
-  if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit" || v.kind === "inbox" || v.kind === "access")) return { kind: v.kind };
+  if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit" || v.kind === "inbox" || v.kind === "access" || v.kind === "trash")) return { kind: v.kind };
   if (isObj(v) && v.kind === "pages") return { kind: "pages", ref: isStr(v.ref) ? v.ref : undefined };
   return { kind: "home" };
 }
@@ -150,6 +150,7 @@ export function parseHash(h: string): { view: View | null; pane: PaneRef | null 
   else if (seg[0] === "history") view = { kind: "history" };
   else if (seg[0] === "audit") view = { kind: "audit" };
   else if (seg[0] === "inbox") view = { kind: "inbox" };
+  else if (seg[0] === "trash") view = { kind: "trash" };
   else if (seg[0] === "pages") view = { kind: "pages", ref: seg[1] };
   else if (seg[0] === "access") view = { kind: "access" };
   else if (seg[0] === "home") view = { kind: "home" };
@@ -164,6 +165,7 @@ export function toHash(view: View, pane: PaneRef | null): string {
   else if (view.kind === "history") path = "/history";
   else if (view.kind === "audit") path = "/audit";
   else if (view.kind === "inbox") path = "/inbox";
+  else if (view.kind === "trash") path = "/trash";
   else if (view.kind === "pages") path = `/pages${view.ref ? "/" + encodeURIComponent(view.ref) : ""}`;
   else if (view.kind === "access") path = "/access";
   return `#${path}${pane ? "?p=" + encodeURIComponent(`${pane.kind}:${pane.id}`) : ""}`;
@@ -194,6 +196,7 @@ interface Store extends Persisted {
   isAdmin: boolean;
   inboxCount: number;
   liveTick: number;
+  trashCount: number;
   liveState: "off" | "connecting" | "live" | "retry";
   smartMsg: string;
   patchTurn: (threadId: string, turnId: string, p: Partial<Turn>) => void;
@@ -263,6 +266,7 @@ export const useStore = create<Store>((set, get) => ({
   isAdmin: false,
   inboxCount: 0,
   liveTick: 0,
+  trashCount: 0,
   liveState: "off",
   smartMsg: "",
   patchTurn: (threadId, turnId, p) => set((s) => ({ threads: s.threads.map((t) => (t.id === threadId ? { ...t, turns: t.turns.map((u) => (u.id === turnId ? { ...u, ...p } : u)) } : t)) })),

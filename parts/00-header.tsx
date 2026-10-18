@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   PanelLeft, Plus, BookOpen, Layers, Cpu, Network, Box, FileText, ShieldCheck, Sparkles,
   ArrowUp, Copy, Check, X, Code2, ChevronRight, ChevronDown, Zap, RotateCcw, FolderKanban, Lock,
-  Search, List, Bookmark, Settings, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud, Inbox, KeyRound, Undo2, Pause, Play, RefreshCw
+  Search, List, Bookmark, Settings, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud, Inbox, KeyRound, Undo2, Pause, Play, RefreshCw, Trash2
 } from "lucide-react";
 
 // #region 1. TYPES
@@ -22,6 +22,7 @@ export type View =
   | { kind: "history" }
   | { kind: "audit" }
   | { kind: "pages"; ref?: string }
+  | { kind: "trash" }
   | { kind: "inbox" }
   | { kind: "access" };
 export type MotionMode = "full" | "reduced" | "system";

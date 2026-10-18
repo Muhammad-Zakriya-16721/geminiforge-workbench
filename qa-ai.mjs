@@ -16,11 +16,16 @@ const BASE_TEXT = "Hello old world. " + "A sentence that stays the same for many
 function mockState() {
   const d = (id, over) => ({ id, project_id: PID, change_set_id: "s1", doc_ref: "page:a", base_rev: 1, op: "find_replace", rationale: "fix typo", status: "pending", note: null, reject_reason: null, risk_score: 0, risk_flags: [], new_doc: false, result_title: null, applied_rev: null, reverted_at: null, created_at: new Date().toISOString(), decided_at: null, ...over });
   return {
-    admin: true, calls: [], tokens: [], paused: false,
+    admin: true, calls: [], paused: false,
+    tokens: [{ id: "tk-old", label: "Old revoked token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() + 86400000).toISOString(), revoked_at: new Date().toISOString(), last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 5).toISOString() }, { id: "tk-old2", label: "Old expired token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() - 86400000).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 9).toISOString() }],
+    trashSets: [{ id: "t1", title: "Trashed edit set", client: "Google", deleted_at: new Date(Date.now() - 86400000 * 2).toISOString(), purge_after: new Date(Date.now() + 86400000 * 28).toISOString(), doc_drafts: [{ id: "x1" }] }],
+    trashPages: [{ id: "tp1", ref: "page:old", kind: "page", title: "Trashed page", deleted_at: new Date(Date.now() - 86400000).toISOString(), purge_after: new Date(Date.now() + 86400000 * 29).toISOString() }],
+    log: [{ id: 3, item_type: "token", item_id: "x", title: "Deleted token A", action: "purged", at: new Date(Date.now() - 3600000).toISOString() }, { id: 2, item_type: "edit", item_id: "t1", title: "Trashed edit set", action: "trashed", at: new Date(Date.now() - 86400000 * 2).toISOString() }],
     sets: [
       { id: "s1", project_id: PID, title: "Tidy the intro", summary: "Two small edits and one rewrite", client: "claude-code/2.1", created_at: new Date(Date.now() - 600000).toISOString(),
         doc_drafts: [d("d1", { doc_ref: "page:a", risk_score: 0 }), d("d2", { doc_ref: "page:b", risk_score: 6, risk_flags: ["whole_doc", "deletes_content"], rationale: "rewrite all" }), d("d3", { doc_ref: "page:c", risk_score: 1, risk_flags: ["new_doc"], new_doc: true, result_title: "Brand new page" })] },
-      { id: "s2", project_id: PID, title: "Old decided set", summary: "", client: null, created_at: new Date(Date.now() - 86400000 * 3).toISOString(), doc_drafts: [d("d4", { change_set_id: "s2", status: "rejected", reject_reason: "not needed", doc_ref: "page:a" })] }
+      { id: "s2", project_id: PID, title: "Old decided set", summary: "", client: null, created_at: new Date(Date.now() - 86400000 * 3).toISOString(), doc_drafts: [d("d4", { change_set_id: "s2", status: "rejected", reject_reason: "not needed", doc_ref: "page:a" })] },
+      { id: "s3", project_id: PID, title: "Accepted set kept", summary: "", client: null, created_at: new Date(Date.now() - 86400000 * 4).toISOString(), doc_drafts: [d("d5", { change_set_id: "s3", status: "applied", applied_rev: 2, doc_ref: "page:a" })] }
     ]
   };
 }
@@ -43,9 +48,21 @@ async function setup(st) {
     if (r.request().method() === "HEAD" || /select=id/.test(u) && /status=eq.pending/.test(u)) return send(r, st.sets.flatMap((s) => s.doc_drafts).filter((x) => x.status === "pending"));
     return send(r, [{ result_body: BASE_TEXT.replace("old", "brand new"), result_title: "Brand new page" }]);
   });
-  await page.route("**/rest/v1/change_sets*", (r) => send(r, st.sets));
+  await page.route("**/rest/v1/change_sets*", (r) => {
+    const req = r.request(), u = req.url();
+    if (req.method() === "DELETE") { const ids = (decodeURIComponent(u).match(/id=in\.\(([^)]*)\)/)?.[1] ?? "").split(",").filter(Boolean); st.calls.push(["purge-edits", ids]); st.trashSets = st.trashSets.filter((x) => !ids.includes(x.id)); return send(r, ids.map((id) => ({ id }))); }
+    if (/deleted_at=not\.is\.null/.test(u)) return send(r, st.trashSets);
+    return send(r, st.sets);
+  });
+  await page.route("**/rest/v1/rpc/trash_edits", (r) => { const b = r.request().postDataJSON(); st.calls.push(["trash-edits", b.p_ids]); const done = b.p_ids.filter((id) => id !== "s3"); const refused = b.p_ids.filter((id) => id === "s3").map((id) => ({ id, reason: "Accepted edits are kept as history. Undo them first." })); st.sets = st.sets.filter((s) => !done.includes(s.id)); return send(r, { done, refused }); });
+  await page.route("**/rest/v1/rpc/restore_edits", (r) => { const b = r.request().postDataJSON(); st.calls.push(["restore-edits", b.p_ids]); return send(r, { done: b.p_ids }); });
+  await page.route("**/rest/v1/rpc/trash_pages", (r) => { const b = r.request().postDataJSON(); st.calls.push(["trash-pages", b.p_ids]); return send(r, { done: b.p_ids, refused: [] }); });
+  await page.route("**/rest/v1/rpc/restore_pages", (r) => { const b = r.request().postDataJSON(); st.calls.push(["restore-pages", b.p_ids]); st.trashPages = st.trashPages.filter((x) => !b.p_ids.includes(x.id)); return send(r, { done: b.p_ids }); });
+  await page.route("**/rest/v1/trash_log*", (r) => send(r, st.log));
   await page.route("**/rest/v1/docs*", (r) => {
     const req = r.request(), u = req.url();
+    if (req.method() === "DELETE") { const ids = (decodeURIComponent(u).match(/id=in\.\(([^)]*)\)/)?.[1] ?? "").split(",").filter(Boolean); st.calls.push(["purge-pages", ids]); st.trashPages = st.trashPages.filter((x) => !ids.includes(x.id)); return send(r, ids.map((id) => ({ id }))); }
+    if (/deleted_at=not\.is\.null/.test(u)) return send(r, st.trashPages);
     if (req.method() === "PATCH") { st.calls.push(["docpatch", req.postDataJSON()]); return r.fulfill({ status: 204, body: "" }); }
     if (req.method() === "POST") { st.calls.push(["docinsert", req.postDataJSON()]); return r.fulfill({ status: 201, body: "" }); }
     if (/source=eq.native/.test(u) && /ref=eq/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString(), body: PAGE_MD }]);
@@ -60,7 +77,7 @@ async function setup(st) {
   });
   await page.route("**/rest/v1/rpc/revert_draft", (r) => { const b = r.request().postDataJSON(); st.calls.push(["revert", b]); const x = st.sets.flatMap((s) => s.doc_drafts).find((y) => y.id === b.p_id); if (x) x.reverted_at = new Date().toISOString(); return send(r, "reverted"); });
   await page.route("**/rest/v1/projects*", async (r) => { if (r.request().method() === "PATCH") { st.calls.push(["pause", r.request().postDataJSON()]); st.paused = r.request().postDataJSON().ai_paused; return r.fulfill({ status: 204, body: "" }); } return send(r, [{ id: PID, slug: "demo", name: "Demo docs", ai_paused: st.paused, ai_guide: "Only fix typos." }]); });
-  await page.route("**/rest/v1/mcp_tokens*", async (r) => { const m = r.request().method(); if (m === "PATCH") { st.calls.push(["tokpatch", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); } return send(r, st.tokens); });
+  await page.route("**/rest/v1/mcp_tokens*", async (r) => { const m = r.request().method(); if (m === "DELETE") { const ids = (decodeURIComponent(r.request().url()).match(/id=in\.\(([^)]*)\)/)?.[1] ?? "").split(",").filter(Boolean); st.calls.push(["purge-tokens", ids]); st.tokens = st.tokens.filter((t) => !ids.includes(t.id)); return send(r, ids.map((id) => ({ id }))); } if (m === "PATCH") { st.calls.push(["tokpatch", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); } return send(r, st.tokens); });
   await page.route("**/rest/v1/rpc/create_mcp_token", (r) => { const b = r.request().postDataJSON(); st.calls.push(["create", b]); st.tokens.unshift({ id: "t1", label: b.p_label, mode: b.p_mode, path_prefixes: b.p_prefixes, daily_limit: b.p_daily_limit, max_pending: 20, expires_at: new Date(Date.now() + 86400000 * 30).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date().toISOString() }); return send(r, "dk_" + "ab".repeat(32)); });
   await page.route("**/rest/v1/rpc/mcp_audit_recent", (r) => send(r, [{ ts: new Date().toISOString(), token_label: "Gemini phone", tool: "read_doc", ref: "page:a", status: "ok" }]));
   await page.route("**/functions/v1/docs-mcp/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { tools: [{ name: "list_projects" }, { name: "read_doc" }] } }) }));
@@ -164,6 +181,62 @@ await p.addScriptTag({ content: axeSrc });
 const ax3 = await p.evaluate(async () => (await window.axe.run(".col", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
 ok("pages: no axe violations", ax3.length === 0, ax3.join(","));
 ok("no page errors on pages", p.errs.length === 0, p.errs.join("|"));
+await p.context().close();
+
+// 6c. trash
+st = mockState(); p = await setup(st);
+await p.goto(`${base}?gftest#/home`, { waitUntil: "networkidle" }); await p.waitForTimeout(800);
+ok("trash: sidebar entry with the count", /Trash/.test(await text(p, ".side")) && /2/.test(await p.locator('.nav:has-text("Trash")').first().textContent()));
+await p.goto(`${base}?gftest#/inbox`, { waitUntil: "networkidle" }); await p.waitForSelector(".ai-set"); await p.click('button:has-text("Decided")'); await p.waitForTimeout(300);
+ok("inbox: accepted sets are marked as kept history and cannot be selected", (await p.locator('.ai-set:has-text("Accepted set kept") input[type=checkbox]').count()) === 0 && /Kept as history/.test(await text(p, ".col")) && (await p.locator('.ai-set:has-text("Old decided set") input[type=checkbox]').count()) === 1);
+await p.check('input[aria-label="Select Old decided set"]'); await p.click('button:has-text("Move 1 to Trash")'); await p.waitForTimeout(500);
+ok("inbox: selected set moved to the Trash with an Undo toast", st.calls.some((c) => c[0] === "trash-edits" && c[1].join() === "s2") && /moved to the Trash/.test(await text(p, ".toast")) && (await p.locator(".toast-undo").count()) === 1);
+await p.click(".toast-undo"); await p.waitForTimeout(400);
+ok("inbox: Undo restores it", st.calls.some((c) => c[0] === "restore-edits" && c[1].join() === "s2"));
+await p.goto(`${base}?gftest#/trash`, { waitUntil: "networkidle" }); await p.waitForSelector(".ai-tok");
+ok("trash: lists edits and pages with days left", (await p.locator(".ai-tok").count()) === 2 && /purges in 28 days/.test(await text(p, ".col")) && /Trashed page/.test(await text(p, ".col")));
+await p.click('button:has-text("Pages (1)")'); await p.waitForTimeout(200);
+ok("trash: tab filter shows only pages", (await p.locator(".ai-tok").count()) === 1 && /Trashed page/.test(await text(p, ".ai-tok")));
+await p.click('button:has-text("All (")'); await p.fill('input[aria-label="Search the Trash"]', "edit set"); await p.waitForTimeout(200);
+ok("trash: search filters", (await p.locator(".ai-tok").count()) === 1 && /Trashed edit set/.test(await text(p, ".ai-tok")));
+await p.fill('input[aria-label="Search the Trash"]', "");
+await p.addScriptTag({ content: axeSrc });
+await p.check('input[aria-label="Select Trashed page"]'); await p.click('button:has-text("Restore (1)")'); await p.waitForTimeout(500);
+ok("trash: restore calls the function", st.calls.some((c) => c[0] === "restore-pages" && c[1].join() === "tp1"));
+await p.locator('.ai-tok:has-text("Trashed edit set") button:has-text("Delete forever")').click(); await p.waitForSelector("dialog[open]");
+const axd = await p.evaluate(async () => (await window.axe.run("dialog[open]", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
+ok("trash: confirm dialog for one item has no typing and no axe violations", /for good/.test(await text(p, "dialog[open]")) && (await p.locator("dialog[open] input").count()) === 0 && axd.length === 0, axd.join(","));
+await p.click('dialog[open] button:has-text("Cancel")'); await p.waitForTimeout(200);
+ok("trash: cancelling deletes nothing", !st.calls.some((c) => c[0] === "purge-edits" && c[1].length > 0));
+await p.locator('.ai-tok:has-text("Trashed edit set") button:has-text("Delete forever")').click(); await p.click('dialog[open] button:has-text("Delete forever")'); await p.waitForTimeout(500);
+ok("trash: single delete forever removes the row", st.calls.some((c) => c[0] === "purge-edits" && c[1].join() === "t1"));
+// empty trash: two steps and typing
+st.trashSets.push({ id: "t2", title: "Second trashed set", client: null, deleted_at: new Date().toISOString(), purge_after: new Date(Date.now() + 86400000 * 30).toISOString(), doc_drafts: [] }); st.trashPages.push({ id: "tp2", ref: "page:two", kind: "page", title: "Second page", deleted_at: new Date().toISOString(), purge_after: new Date(Date.now() + 86400000 * 30).toISOString() });
+await p.click('button:has-text("Refresh")').catch(() => {}); await p.evaluate(() => window.__gf.store.setState((s) => ({ liveTick: s.liveTick + 1 }))); await p.waitForTimeout(600);
+await p.click('button:has-text("Empty Trash")'); await p.waitForSelector("dialog[open]");
+ok("trash: empty trash step 1 shows the counts", /1 edit set\(s\) and 2 page\(s\)/.test(await text(p, "dialog[open]")) || /edit set\(s\) and/.test(await text(p, "dialog[open]")));
+await p.click('dialog[open] button:has-text("Continue")'); await p.waitForTimeout(300);
+const btn = p.locator('dialog[open] button:has-text("Empty Trash")');
+ok("trash: step 2 needs the typed phrase", await btn.isDisabled());
+await p.fill("dialog[open] input", "EMPTY TRASH"); ok("trash: typed phrase enables the button", await btn.isEnabled());
+await btn.click(); await p.waitForTimeout(600);
+ok("trash: everything is deleted", st.calls.filter((c) => c[0] === "purge-edits" || c[0] === "purge-pages").length >= 2 && (await p.locator(".ai-tok").count()) === 0);
+await p.click('button:has-text("Deleted tokens")'); ok("trash: deleted tokens are listed without a restore option", /Deleted token A/.test(await text(p, ".col")) && (await p.locator('button:has-text("Restore")').count()) === 0);
+await p.click('button:has-text("Log")'); ok("trash: log lists the actions", /Moved to Trash/.test(await text(p, ".col")));
+// tokens: delete one dead token, then clear the rest
+await p.goto(`${base}?gftest#/access`, { waitUntil: "networkidle" }); await p.waitForSelector(".ai-tok");
+ok("access: dead tokens offer Delete and a bulk clear", (await p.locator('.ai-tok:has-text("Old revoked token") button:has-text("Delete")').count()) === 1 && /Clear revoked and expired \(2\)/.test(await text(p, ".set-h:has-text('Tokens')")));
+await p.locator('.ai-tok:has-text("Old revoked token") button:has-text("Delete")').click(); await p.click('dialog[open] button:has-text("Delete token")'); await p.waitForTimeout(500);
+ok("access: single token delete", st.calls.some((c) => c[0] === "purge-tokens" && c[1].join() === "tk-old"));
+await p.click('button:has-text("Clear revoked and expired")'); await p.waitForSelector("dialog[open]");
+const delBtn = p.locator('dialog[open] button:has-text("Delete token")'); ok("access: bulk clear needs typing DELETE", await delBtn.isDisabled() || (await p.locator("dialog[open] input").count()) === 0);
+await p.context().close();
+// pages: move to trash
+st = mockState(); p = await setup(st);
+await p.goto(`${base}?gftest#/pages/page%3Anotes`, { waitUntil: "networkidle" }); await p.waitForSelector(".md");
+await p.click('button:has-text("Move to Trash")'); await p.waitForTimeout(500);
+ok("pages: Move to Trash calls the function and shows Undo", st.calls.some((c) => c[0] === "trash-pages" && c[1].join() === "dd1") && /Trash/.test(await text(p, ".toast")));
+ok("no page errors in trash flows", p.errs.length === 0, p.errs.join("|"));
 await p.context().close();
 
 // 7. not an admin

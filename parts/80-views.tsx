@@ -99,7 +99,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
 }
 
 export function Sidebar() {
-  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name, isAdmin, inboxCount } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, inboxCount: s.inboxCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
+  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name, isAdmin, inboxCount, trashCount } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, inboxCount: s.inboxCount, trashCount: s.trashCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
   const recents = threads.filter((t) => !t.archived).sort((a, b) => b.at - a.at).slice(0, 25);
   const pinned = pins.map((k) => ({ k, info: pinInfo(k, threads) })).filter((x) => x.info);
   const done = DEEP_PROMPTS.filter((p) => tracker[p.id]?.status === "done").length;
@@ -120,6 +120,7 @@ export function Sidebar() {
           {isAdmin && <div className="side-sec">AI space</div>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "pages" ? "page" : undefined} onClick={() => go({ kind: "pages" })}><FileText size={16} aria-hidden /><span className="nav-t">Added pages</span></button>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "inbox" ? "page" : undefined} onClick={() => go({ kind: "inbox" })}><Inbox size={16} aria-hidden /><span className="nav-t">Review inbox</span>{inboxCount > 0 && <span className="mono small acc" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}</button>}
+          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "trash" ? "page" : undefined} onClick={() => go({ kind: "trash" })}><Trash2 size={16} aria-hidden /><span className="nav-t">Trash</span>{trashCount > 0 && <span className="mono small dim" aria-label={`${trashCount} in the Trash`}>{trashCount}</span>}</button>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "access" ? "page" : undefined} onClick={() => go({ kind: "access" })}><KeyRound size={16} aria-hidden /><span className="nav-t">AI access</span></button>}
 
           {pinned.length > 0 && <div className="side-sec">Pinned</div>}
@@ -156,7 +157,7 @@ export function Header() {
   const { view, sidebarOpen, set, setPalette, pins, togglePin, threads } = useStore(useShallow((s) => ({ view: s.view, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, pins: s.pins, togglePin: s.togglePin, threads: s.threads })));
   const chapter = view.kind === "chapter" ? CHAPTERS.find((c) => c.id === view.id) : undefined;
   const thread = view.kind === "thread" ? threads.find((t) => t.id === view.id) : undefined;
-  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "pages" ? "Added pages" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : "New question";
+  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "pages" ? "Added pages" : view.kind === "trash" ? "Trash" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : "New question";
   const key = viewKey(view);
   const pinnable = !!chapter || !!thread;
   return (
@@ -436,6 +437,7 @@ export function Palette() {
       { id: "a-aud", title: "Open claims review", sub: "Facts to re-check in the documentation", group: "Action", run: () => go({ kind: "audit" }) },
       ...(isAdmin ? [
         { id: "a-inbox", title: "Open the AI review inbox", sub: "Edits proposed by AI tools, waiting for your decision", group: "Action", run: () => go({ kind: "inbox" }) },
+        { id: "a-trash", title: "Open the Trash", sub: "Deleted edits and pages, restore or delete for good", group: "Action", run: () => go({ kind: "trash" }) },
         { id: "a-access", title: "Open AI access", sub: "Tokens, activity and the pause switch", group: "Action", run: () => go({ kind: "access" }) }
       ] : []),
       { id: "a-sb", title: sidebarOpen ? "Collapse sidebar" : "Expand sidebar", sub: "Ctrl B", group: "Action", run: () => set({ sidebarOpen: !sidebarOpen }) },
