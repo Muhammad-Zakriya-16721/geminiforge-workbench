@@ -120,8 +120,7 @@ export function buildServer({ rpc, token, ip, client }) {
       const r = await call("mcp_propose_set", { p_project: p.project, p_title: title, p_summary: summary ?? "", p_edits: edits, p_idem: idem ?? null, p_client: client ?? null });
       if (r.error) return errResult(r.error, r.hint, r.details);
       const flagged = r.drafts.filter((d) => d.risk?.length).map((d) => `${d.id}: ${d.risk.join(", ")}`);
-      const gen = r.drafts.some((d) => d.generated_doc);
-      return ok(`Change set ${r.change_set_id} saved with ${r.drafts.length} edit(s)${r.duplicate ? " (already existed)" : ""}. Nothing is published: the owner must accept each edit in the app.` + (flagged.length ? ` Flagged for extra review - ${flagged.join("; ")}.` : "") + (gen ? " Some documents are generated from source data, so accepting only records the approval for manual follow-up." : "") + " Use get_draft with the change set id to see the outcome.", r);
+      return ok(`Change set ${r.change_set_id} saved with ${r.drafts.length} edit(s)${r.duplicate ? " (already existed)" : ""}. Nothing is published: the owner must accept each edit in the app.` + (flagged.length ? ` Flagged for extra review - ${flagged.join("; ")}.` : "") + " Use get_draft with the change set id, or list_drafts, to see the outcome and the reviewer's feedback.", r);
     };
     const EDIT = z.object({
       id: z.string().min(2).max(200).describe("Document id. For a new document use kind:name, e.g. page:release-notes."),
@@ -139,12 +138,20 @@ export function buildServer({ rpc, token, ip, client }) {
     });
     const toEdit = (a) => ({ id: a.id, base_rev: a.base_rev, op: a.op, new_doc: a.new_doc, rationale: a.rationale,
       payload: Object.fromEntries(Object.entries({ body: a.body, find: a.find, replace: a.op === "find_replace" ? (a.replace ?? "") : a.replace, expected: a.expected, anchor: a.anchor, text: a.text, title: a.title }).filter(([, v]) => v !== undefined)) });
-    s.registerTool("propose_changes", { title: "Propose a change set", description: "Propose 1-20 edits as ONE reviewable change set (one edit per document). Nothing is published: the owner reviews each edit in an inbox and accepts or rejects it. Every edit is checked right away and the whole set is refused with per-edit reasons if any check fails. Read documents first (read_doc) and pass each rev as base_rev. Keep edits small and say why in rationale.", annotations: DRAFT,
+    s.registerTool("propose_changes", { title: "Propose a change set", description: "Propose 1-20 edits as ONE reviewable change set (one edit per document). Nothing is published: the owner reviews each edit in an inbox and accepts or rejects it. Every edit is checked right away and the whole set is refused with per-edit reasons if any check fails. Read documents first (read_doc) and pass each rev as base_rev. Keep edits small and say why in rationale. Generated pages (crates, packs, prompts, confirmations, patches, spikes, claims and chapter text) only accept find_replace or insert_after, and the text you match must sit inside ONE sentence or field of the source; new documents need new_doc, a kind:name id, a title and a body.", annotations: DRAFT,
       inputSchema: z.object({ title: z.string().min(1).max(200).describe("One line the reviewer sees in the inbox."), summary: z.string().max(4000).default(""), edits: z.array(EDIT).min(1).max(20), idempotency_key: z.string().max(80).optional(), project: P }) },
       guard(async (a) => submit(a.project, a.title, a.summary, a.edits.map(toEdit), a.idempotency_key)));
     s.registerTool("propose_edit", { title: "Propose one edit", description: "Shortcut for propose_changes with a single edit to one document.", annotations: DRAFT,
       inputSchema: EDIT.extend({ idempotency_key: z.string().max(80).optional(), project: P }) },
       guard(async (a) => submit(a.project, (a.rationale || `Edit ${a.id}`).slice(0, 200), a.rationale, [toEdit(a)], a.idempotency_key)));
+    s.registerTool("list_drafts", { title: "My proposals", description: "List your recent proposals with their state and the reviewer's feedback (why something was rejected). Read this before proposing again so you do not repeat a rejected edit.", annotations: RO,
+      inputSchema: z.object({ status: z.enum(["pending", "applied", "rejected", "stale", "reverted"]).optional(), limit: z.number().int().min(1).max(50).default(20), project: P }) },
+      guard(async ({ status, limit, project }) => {
+        const p = await pick(project); if (p.fail) return p.fail;
+        const r = await call("mcp_list_drafts", { p_project: p.project, p_status: status ?? null, p_limit: limit });
+        if (r.error) return errResult(r.error, r.hint);
+        return ok(wrap(r.drafts.map((d) => `${d.draft_id} ${d.id}: ${d.status}${d.feedback ? " - " + clean(d.feedback) : ""}`).join("\n") || "No proposals yet."), { drafts: r.drafts.map((d) => ({ ...d, feedback: d.feedback ? clean(d.feedback) : null })) });
+      }));
     s.registerTool("get_draft", { title: "Draft status", description: "Check what happened to a draft or a whole change set you proposed (pass either id): pending, applied, rejected with the reviewer's reason, stale or reverted.", annotations: RO,
       inputSchema: z.object({ draft_id: z.string().uuid(), project: P }) },
       guard(async ({ draft_id, project }) => {

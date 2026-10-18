@@ -8,7 +8,7 @@ const rpc = async (method, params = {}) => {
   const t = await r.text(); const d = t.startsWith("event:") ? t.split("\n").find((l) => l.startsWith("data:")).slice(5) : t; const j = JSON.parse(d); return j.result ?? j;
 };
 const tool = (name, args) => rpc("tools/call", { name, arguments: args });
-let r = await rpc("tools/list"); ok("token tools/list has 10 tools", r.tools.length === 10 && r.tools.some((t) => t.name === "propose_changes"), r.tools.map(t=>t.name).join());
+let r = await rpc("tools/list"); ok("token tools/list has 11 tools", r.tools.length === 11 && r.tools.some((t) => t.name === "propose_changes"), r.tools.map(t=>t.name).join());
 r = await tool("read_doc", { ids: ["confirm:CONFIRM-01", "confirm:CONFIRM-02"] }); const docs = r.structuredContent.docs; const body1 = r.content[0].text.split("# ")[1].split("\n\n")[1]; const FIND = body1.split(/\s+/).find((w) => /^[A-Za-z]{6,}$/.test(w)); console.log("FIND", FIND);
 ok("read_doc revs", docs.length === 2 && docs.every((d) => d.rev >= 1), JSON.stringify(docs.map((d) => d.rev)));
 r = await tool("propose_changes", { title: "e2e: bad set", edits: [{ id: "confirm:CONFIRM-01", base_rev: 99, find: "x", replace: "y" }, { id: "nope:1", base_rev: 1, body: "z" }] });
