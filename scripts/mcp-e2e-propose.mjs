@@ -28,4 +28,8 @@ ok("idempotency returns same set", r2.structuredContent?.duplicate === true && r
 r = await tool("get_draft", { draft_id: cs ?? "00000000-0000-4000-8000-000000000000" }); ok("get_draft by change set id", /pending/.test(r.content[0].text), r.content[0].text.replace(/\n/g, " | ").slice(0, 160));
 r = await tool("propose_edit", { id: "confirm:CONFIRM-02", base_rev: docs[1].rev, op: "replace", body: "z".repeat(50), rationale: "e2e whole replace" });
 ok("propose_edit single works and flags risk", !r.isError && /Flagged/.test(r.content[0].text), r.content[0].text.slice(0, 260));
+r = await tool("propose_edit", { id: "page:e2e-new-doc", new_doc: true, title: "E2E new page", body: "# E2E\n\ntext", rationale: "e2e, reject me" });
+ok("new document proposal saved (regression: ambiguous column bug)", !r.isError && /saved with 1 edit/.test(r.content[0].text), r.content[0].text.slice(0, 120));
+r = await tool("propose_edit", { id: "spike:e2e-new", new_doc: true, title: "X", body: "y" });
+ok("reserved prefix refused with a hint", r.isError && /reserved/.test(r.content[0].text), r.content[0].text.slice(0, 140));
 console.log("CS", cs); console.log(`\n${pass}/${pass + fail} passed`); process.exit(fail ? 1 : 0);
