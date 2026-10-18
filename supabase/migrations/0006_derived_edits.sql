@@ -155,6 +155,8 @@ begin
       if nd then
         if d.id is not null then msg := 'A document with this id already exists; choose another id or edit it.';
         elsif ref !~ '^[a-z][a-z0-9_-]{1,20}:[A-Za-z0-9][A-Za-z0-9._ /#-]{0,150}$' then msg := 'A new document id looks like kind:name, for example page:release-notes.';
+        elsif exists (select 1 from public.docs x where x.project_id = s.project_id and x.source = 'derived' and starts_with(x.ref, split_part(ref, ':', 1) || ':')) then
+          msg := format('The prefix "%s:" is reserved for generated pages in this project. Use page:, note: or decision: for new documents.', split_part(ref, ':', 1));
         elsif ttl is null or length(ttl) > 200 then msg := 'A new document needs a title (payload.title, up to 200 characters).';
         elsif coalesce(pay ->> 'body', '') = '' or length(pay ->> 'body') > 40000 then msg := 'A new document needs a body of 1 to 40000 characters.';
         else
