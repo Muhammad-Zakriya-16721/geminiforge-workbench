@@ -21,6 +21,7 @@ export type View =
   | { kind: "tracker" }
   | { kind: "history" }
   | { kind: "audit" }
+  | { kind: "pages"; ref?: string }
   | { kind: "inbox" }
   | { kind: "access" };
 export type MotionMode = "full" | "reduced" | "system";

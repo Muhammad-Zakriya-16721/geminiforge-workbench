@@ -171,6 +171,7 @@ export default function App() {
               {view.kind === "tracker" && <TrackerView />}
               {view.kind === "history" && <HistoryView />}
               {view.kind === "audit" && <AuditView />}
+              {view.kind === "pages" && <PagesView refId={view.ref} />}
               {view.kind === "inbox" && <InboxView />}
               {view.kind === "access" && <AccessView />}
             </ErrorBoundary>

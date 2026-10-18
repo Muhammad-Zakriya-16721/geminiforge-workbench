@@ -254,12 +254,13 @@ begin
 end;
 $$;
 
+-- security definer: a plain update that soft-deletes a document fails row security (the new row no longer passes the read policy)
 create or replace function public.revert_draft(p_id uuid) returns text
-language plpgsql set search_path = '' as $$
+language plpgsql security definer set search_path = '' as $$
 declare dr public.doc_drafts; d public.docs; old public.doc_revisions; r jsonb;
 begin
   select * into dr from public.doc_drafts x where x.id = p_id;
-  if dr.id is null then raise exception 'no such draft'; end if;
+  if dr.id is null or not private.can_edit_project(dr.project_id) then raise exception 'no such draft'; end if;
   if dr.status <> 'applied' or dr.reverted_at is not null then raise exception 'only an applied change that was not undone yet can be undone'; end if;
   select * into d from public.docs x where x.project_id = dr.project_id and x.ref = dr.doc_ref;
   if d.id is null or d.rev <> dr.applied_rev then raise exception 'The document changed after this edit was applied. Restore an older version from its history instead.'; end if;
@@ -281,6 +282,8 @@ begin
   return 'reverted';
 end;
 $$;
+revoke all on function public.revert_draft(uuid) from public, anon;
+grant execute on function public.revert_draft(uuid) to authenticated;
 
 create or replace function public.mcp_list_drafts(p_token text, p_ip text, p_project text, p_status text default null, p_limit int default 20)
 returns jsonb language plpgsql security definer set search_path = '' as $$

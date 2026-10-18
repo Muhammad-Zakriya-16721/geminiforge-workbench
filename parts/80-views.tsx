@@ -4,7 +4,7 @@ const nowGreeting = () => {
   return h >= 5 && h < 12 ? "Good morning" : h >= 12 && h < 18 ? "Good afternoon" : h >= 18 && h < 22 ? "Good evening" : "Hello, night owl";
 };
 
-const viewKey = (v: View) => (v.kind === "chapter" ? `chapter:${v.id}` : v.kind === "thread" ? `thread:${v.id}` : v.kind);
+const viewKey = (v: View) => (v.kind === "chapter" ? `chapter:${v.id}` : v.kind === "thread" ? `thread:${v.id}` : v.kind === "pages" ? `pages:${v.ref ?? ""}` : v.kind);
 
 function pinInfo(key: string, threads: Thread[]): { title: string; run: () => void } | null {
   const st = useStore.getState();
@@ -118,6 +118,7 @@ export function Sidebar() {
           <button type="button" className="nav" aria-current={view.kind === "tracker" ? "page" : undefined} onClick={() => go({ kind: "tracker" })}><List size={16} aria-hidden /><span className="nav-t">Tracker</span><span className="mono dim small">{done}/{DEEP_PROMPTS.length}</span></button>
           <button type="button" className="nav" aria-current={view.kind === "audit" ? "page" : undefined} onClick={() => go({ kind: "audit" })}><ListChecks size={16} aria-hidden /><span className="nav-t">Claims review</span></button>
           {isAdmin && <div className="side-sec">AI space</div>}
+          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "pages" ? "page" : undefined} onClick={() => go({ kind: "pages" })}><FileText size={16} aria-hidden /><span className="nav-t">Added pages</span></button>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "inbox" ? "page" : undefined} onClick={() => go({ kind: "inbox" })}><Inbox size={16} aria-hidden /><span className="nav-t">Review inbox</span>{inboxCount > 0 && <span className="mono small acc" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}</button>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "access" ? "page" : undefined} onClick={() => go({ kind: "access" })}><KeyRound size={16} aria-hidden /><span className="nav-t">AI access</span></button>}
 
@@ -155,7 +156,7 @@ export function Header() {
   const { view, sidebarOpen, set, setPalette, pins, togglePin, threads } = useStore(useShallow((s) => ({ view: s.view, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, pins: s.pins, togglePin: s.togglePin, threads: s.threads })));
   const chapter = view.kind === "chapter" ? CHAPTERS.find((c) => c.id === view.id) : undefined;
   const thread = view.kind === "thread" ? threads.find((t) => t.id === view.id) : undefined;
-  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : "New question";
+  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "pages" ? "Added pages" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : "New question";
   const key = viewKey(view);
   const pinnable = !!chapter || !!thread;
   return (

@@ -11,6 +11,7 @@ const UID = "11111111-1111-4111-8111-111111111111", PID = "22222222-2222-4222-82
 const ref = (await (await fetch(base)).text()).match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? (await fs.promises.readFile(".env", "utf8")).match(/https:\/\/([a-z0-9]+)\.supabase\.co/)[1];
 const browser = await chromium.launch({ executablePath: exe, args: ["--no-sandbox"] });
 
+const PAGE_MD = "## Section one\n\nA paragraph with **bold**, `code` and [a link](https://example.com) and [bad](javascript:alert(1)).\n\n- first\n- second\n\n```\nlet x = 1;\n```\n\n> quoted text\n\n<script>alert(1)</script>";
 const BASE_TEXT = "Hello old world. " + "A sentence that stays the same for many words to make the unchanged part long enough to fold. ".repeat(6) + "Tail old.";
 function mockState() {
   const d = (id, over) => ({ id, project_id: PID, change_set_id: "s1", doc_ref: "page:a", base_rev: 1, op: "find_replace", rationale: "fix typo", status: "pending", note: null, reject_reason: null, risk_score: 0, risk_flags: [], new_doc: false, result_title: null, applied_rev: null, reverted_at: null, created_at: new Date().toISOString(), decided_at: null, ...over });
@@ -43,8 +44,15 @@ async function setup(st) {
     return send(r, [{ result_body: BASE_TEXT.replace("old", "brand new"), result_title: "Brand new page" }]);
   });
   await page.route("**/rest/v1/change_sets*", (r) => send(r, st.sets));
-  await page.route("**/rest/v1/docs*", (r) => send(r, [{ ref: "page:a", title: "Alpha page" }, { ref: "page:b", title: "Beta page" }]));
-  await page.route("**/rest/v1/doc_revisions*", (r) => send(r, [{ body: BASE_TEXT, title: "Alpha page" }]));
+  await page.route("**/rest/v1/docs*", (r) => {
+    const req = r.request(), u = req.url();
+    if (req.method() === "PATCH") { st.calls.push(["docpatch", req.postDataJSON()]); return r.fulfill({ status: 204, body: "" }); }
+    if (req.method() === "POST") { st.calls.push(["docinsert", req.postDataJSON()]); return r.fulfill({ status: 201, body: "" }); }
+    if (/source=eq.native/.test(u) && /ref=eq/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString(), body: PAGE_MD }]);
+    if (/source=eq.native/.test(u)) return send(r, [{ id: "dd1", project_id: PID, ref: "page:notes", kind: "page", title: "Notes page", rev: 3, updated_at: new Date().toISOString() }]);
+    return send(r, [{ ref: "page:a", title: "Alpha page" }, { ref: "page:b", title: "Beta page" }]);
+  });
+  await page.route("**/rest/v1/doc_revisions*", (r) => { const u = r.request().url(); if (/select=rev%2Ckind/.test(u)) return send(r, [{ rev: 3, kind: "ai", created_at: new Date().toISOString(), title: "Notes page" }, { rev: 2, kind: "edit", created_at: new Date().toISOString(), title: "Notes page" }, { rev: 1, kind: "ai", created_at: new Date().toISOString(), title: "Notes page" }]); return send(r, [{ body: BASE_TEXT, title: "Alpha page" }]); });
   await page.route("**/rest/v1/rpc/decide_drafts", async (r) => {
     const b = r.request().postDataJSON(); st.calls.push(["decide", b]);
     const res = b.p_ids.map((id) => { const x = st.sets.flatMap((s) => s.doc_drafts).find((y) => y.id === id); if (x && x.status === "pending") { x.status = b.p_approve ? "applied" : "rejected"; x.reject_reason = b.p_reason; x.applied_rev = 2; } return { id, status: x?.status }; });
@@ -123,6 +131,29 @@ await p.addScriptTag({ content: axeSrc });
 const ax2 = await p.evaluate(async () => (await window.axe?.run(".col", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] }))?.violations.map((v) => `${v.id}:${v.nodes.length}`) ?? ["axe-missing"]);
 ok("access: no axe violations", ax2.length === 0 || ax2[0] === "axe-missing", ax2.join(","));
 ok("no page errors on the access page", p.errs.length === 0, p.errs.join("|"));
+await p.context().close();
+
+// 6b. added pages
+st = mockState(); p = await setup(st);
+await p.goto(`${base}?gftest#/pages`, { waitUntil: "networkidle" }); await p.waitForSelector(".pg-row");
+ok("pages: list shows the native page", /Notes page/.test(await text(p, ".pg-row")) && /AI space|Added pages/.test(await text(p, ".side")));
+await p.click(".pg-row"); await p.waitForSelector(".md");
+const mdc = [await p.locator(".md h3").count(), await p.locator(".md strong").count(), await p.locator(".md ul li").count(), await p.locator(".md pre").count(), await p.locator(".md blockquote").count()];
+ok("pages: Markdown rendered safely", mdc.join() === "1,1,2,1,1", mdc.join() + " " + (await text(p, ".md")).slice(0, 200));
+ok("pages: https link clickable, javascript link and raw HTML are not", (await p.locator('.md a[href^="https://example.com"]').count()) === 1 && (await p.locator('.md a[href^="javascript"]').count()) === 0 && (await p.locator(".md script").count()) === 0 && /<script>alert/.test(await text(p, ".md")));
+ok("pages: history lists versions with labels", /Accepted AI edit/.test(await text(p, ".col")) && (await p.locator('button:has-text("Restore")').count()) === 2);
+await p.click('button:has-text("Edit")'); await p.fill('textarea[aria-label="Markdown text"]', "# Hi\n\nnew text"); await p.waitForTimeout(200);
+ok("pages: live preview while editing", /new text/.test(await text(p, ".pg-ed .pv")));
+await p.click('button:has-text("Save")'); await p.waitForTimeout(400);
+ok("pages: save sends the body", st.calls.some((c) => c[0] === "docpatch" && c[1].body === "# Hi\n\nnew text"));
+await p.locator('button:has-text("Restore")').first().click(); await p.waitForTimeout(400);
+ok("pages: restore writes the old version back", st.calls.filter((c) => c[0] === "docpatch").length >= 2);
+await p.click('button:has-text("All added pages")'); await p.fill('input[aria-label="New page title"]', "My new page"); await p.click('button:has-text("New page")'); await p.waitForTimeout(500);
+ok("pages: create inserts page:<slug>", st.calls.some((c) => c[0] === "docinsert" && c[1].ref === "page:my-new-page" && c[1].source === "native"));
+await p.addScriptTag({ content: axeSrc });
+const ax3 = await p.evaluate(async () => (await window.axe.run(".col", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
+ok("pages: no axe violations", ax3.length === 0, ax3.join(","));
+ok("no page errors on pages", p.errs.length === 0, p.errs.join("|"));
 await p.context().close();
 
 // 7. not an admin

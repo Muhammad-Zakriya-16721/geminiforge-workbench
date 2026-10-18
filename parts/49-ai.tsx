@@ -187,7 +187,7 @@ export function InboxView() {
     const n = (s: string) => res.filter((r) => r.status === s).length;
     const applied = res.filter((r) => r.status === "applied").map((r) => r.id);
     const parts = [n("applied") && `${n("applied")} accepted`, n("approved") && `${n("approved")} approved to apply by hand`, n("rejected") && `${n("rejected")} rejected`, n("stale") && `${n("stale")} out of date`].filter(Boolean);
-    notify(parts.join(", ") || "Nothing changed", applied.length ? () => { void Promise.all(applied.map((id) => supabase!.rpc("revert_draft", { p_id: id }))).then(() => { void load(); void refreshAi(); }); } : undefined);
+    notify(parts.join(", ") || "Nothing changed", applied.length ? () => { void Promise.all(applied.map((id) => supabase!.rpc("revert_draft", { p_id: id }))).then((rs) => { const bad = rs.find((r) => r.error); if (bad?.error) useStore.getState().notify(`Could not undo: ${bad.error.message}`); void load(); void refreshAi(); }); } : undefined);
     await load(); void refreshAi();
   }, [busy, notify, load]);
 
