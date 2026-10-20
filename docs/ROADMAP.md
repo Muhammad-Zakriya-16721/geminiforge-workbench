@@ -1,3 +1,5 @@
+> SUPERSEDED by docs/03-ROADMAP-NEXT.md (kept for its research answers).
+
 # GeminiForge Workbench: plan for the next sessions (written 2026-10-18)
 
 Research behind this plan: four read-only research reports (Supabase Realtime; trash and deletion; MCP instructions and token security; review-inbox UX), plus my own checks of the live database, the code and the logs. Items marked UNVERIFIED could not be confirmed (GitHub API was blocked in the research sessions, so most repository dates are unknown).

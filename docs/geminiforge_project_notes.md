@@ -173,3 +173,6 @@ RESEARCH SUMMARY and the phased plan: docs/ROADMAP.md (Phases 1-8, problems E1-E
 - UI: review inbox confirms Accept all (when high risk) and Reject all; Show older; next-card focus after a decision; busy guard; peek has Accept/Reject; admin gate shows Loading; guide box no longer overwritten by live reload; Revoke/Revoke all use the confirm dialog; Trash auto-purge is server side.
 - New: backup JSON + llms.txt download (AI access page), Checks list, tab title "(n)", "new since last visit" line, "AI edited" trail in chapters (owner only), pages: import .md, download .md, tables, save refuses when the page changed.
 - Tests: qa-ai 92/92, qa-content 12/12, prodcheck 101/101, Canvas build ok, mcp-e2e 13/13 (live).
+
+## ROUND 18 (2026-10-20) hand-off
+Owner hit their usage limit. Daily research task deleted. Wrote docs/00-07 (hand-off, vision, architecture, roadmap, security, 150 ideas, API plan, limits). Owner decisions: multiple orgs/projects are main; direct editing of all documents/chapters; trash timer in app; master file -> phases -> steps/decisions product; API keys later. No code changed this round. Folder restructure (R0) deliberately NOT done (risk).

@@ -11,3 +11,4 @@ check-report.json
 .env
 .env.*
 !.env.example
+*.zip
