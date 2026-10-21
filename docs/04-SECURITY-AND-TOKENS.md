@@ -1,3 +1,5 @@
+**UPDATE 2026-10-21: see docs/14 (MCP 2026-07-28 spec, per-client matrix, Supabase OAuth beta caveats, token format, review friction). Where this file says UNVERIFIED for Supabase OAuth, docs/14 now has the verified facts.**
+
 # Security and token safety
 
 ## Built (verified)

@@ -1,3 +1,5 @@
+**SUPERSEDED 2026-10-21 by docs/11-MASTER-PLAN.md (v2).** Kept for history.
+
 # Roadmap from 2026-10-20 (supersedes ROADMAP.md; that file keeps the research answers)
 
 ## Done (do not redo)

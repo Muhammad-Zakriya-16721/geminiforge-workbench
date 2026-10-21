@@ -2,6 +2,26 @@
 
 Written 2026-10-21. Every prompt is self-contained: you can paste it alone. The optional attachment is one file, `docs/context-pack.pdf` (what the app is, the limits, the decisions). Sources behind these instructions are in docs/10 section C.
 
+## 0. Status after the 2026-10-21 research (read first)
+Claude already researched many of these with sources (docs/13-18). Run a Gemini prompt only as a CROSS-CHECK of the decision it feeds, or where marked OPEN.
+| Prompt | Status | Answered in |
+|---|---|---|
+| R1 editor and AI-suggestion review | answered (CodeMirror 6 + merge view) | docs/17, 14 |
+| R2 master file data model | answered | docs/13 |
+| R3 private publishing and share links | partly (limits, grants, leaks); OPEN: share-link implementation details on Supabase | docs/16, 18 |
+| R4 ask-the-docs | answered (Anthropic Haiku 5.5 + Citations + FTS); cross-check prices before launch | docs/15 |
+| R5 MCP security, OAuth, clients | answered; OPEN: what the consumer Gemini app accepts (plan requirement unclear) | docs/14 |
+| R6 transactional email | answered | docs/10, 16 |
+| R7 free-plan limits | answered | docs/16 |
+| R8 workspace UX benchmark | answered (features); OPEN: screenshot-level navigation comparison | docs/18, 10 |
+| R9 accessibility of custom widgets | OPEN | – |
+| R10 import/export formats | answered | docs/17 |
+| R11 AI-edit review at scale | partly; research on automation bias is thin | docs/14 |
+| R12 offline and sync | answered | docs/17 |
+| R13 Urdu/bidirectional text, search and sorting in Postgres and CodeMirror | NEW, OPEN | – |
+| R14 privacy basics for a solo owner storing invitee emails (GDPR-style duties, retention) | NEW, OPEN | docs/14 (partial) |
+| R15 consumer Gemini app custom MCP: exact requirements, plan, regions, limits, what breaks | NEW, OPEN | docs/14 (partial) |
+
 ## 1. What I could and could not confirm
 - **Gemini 4 Argon** exists (Google's flagship reasoning model, thinking levels low/medium/high; API docs page updated 2026-10-14). "Argon High" as a named mode in the Deep Research screen is **UNVERIFIED**. If your picker shows "Argon" with a "High" option, choose that. If the Deep Research screen has no model picker, just run it. Please send me a screenshot of the picker so I can write this correctly (**Q13** in the master plan).
 - Google's pages give no fixed Deep Research counts for AI Pro (usage is compute-based, refreshes every 5 hours with a weekly cap) and do not state how many runs can go in parallel. Test: start two runs at once on one account.
@@ -120,6 +140,28 @@ Questions: 1) Review UX in Cursor, GitHub Copilot code review, Google Docs sugge
 ```
 Objective: Decide how far to go with offline reading and sync for a small docs app.
 Questions: 1) PWA and service-worker caching patterns for a Vite/React app in 2026 (update strategies, privacy of cached private documents, cache clearing on sign-out). 2) Local-first options (CRDT: Yjs, Automerge; sync engines) vs 3-way merge as we use now: when is the extra complexity justified for one owner plus a few collaborators? 3) Storage limits and eviction on iOS Safari and Android Chrome. 4) Security: encrypting cached documents, what happens on shared computers.
+[then Sources ... Final check]
+```
+
+### R13. Urdu and bidirectional text (NEW)
+```
+Objective: Make sure documents containing Urdu (right-to-left, Nastaliq or Naskh fonts) and English mix work in a Markdown editor, search and export.
+Context: [template context]. UI is English only; documents may contain Urdu paragraphs and mixed lines.
+Questions: 1) CodeMirror 6 and Markdown preview in the browser: per-line text direction (`dir="auto"`, unicode-bidi), cursor movement, known bugs. 2) Fonts: best free web fonts for Urdu on the web (Noto Nastaliq Urdu, Noto Naskh Arabic, others), loading cost, line-height problems. 3) PostgreSQL full-text search for Urdu: available dictionaries/configs (`simple`), tokenization, normalization of Arabic-script characters (Yeh/Heh variants, diacritics), trigram search; examples. 4) Sorting/collation of Urdu in Postgres. 5) PDF/print export and Markdown export pitfalls with RTL. 6) A test list of tricky strings.
+[then Sources ... Final check]
+```
+
+### R14. Privacy basics for a solo owner (NEW)
+```
+Objective: Know the minimum data-protection duties and good practice when a small web app stores invited people's email addresses and activity logs.
+Questions: 1) Does GDPR or comparable law apply to a personal project with a few invited collaborators; household/personal exemption limits; UK/EU/Pakistan (PDPB status as of Oct 2026) angles. 2) Lawful basis for sending an invitation email to a named person. 3) Retention and deletion: how long to keep invite records, audit logs, IP addresses; per-person export and erasure requests: practical implementation for a Supabase app. 4) What to put in a short privacy notice. 5) Data-processor terms with Supabase, Vercel, Google (Gmail), Anthropic.
+[then Sources ... Final check]
+```
+
+### R15. Consumer Gemini app and custom MCP servers (NEW)
+```
+Objective: Find exactly what the consumer Gemini app (web and mobile) accepts for a custom remote MCP server in Oct 2026.
+Questions: 1) Official requirements: plan (Google AI Pro vs free), region, language, account type, Keep Activity setting; how to add it step by step. 2) Authentication options (header token, OAuth, none; Dynamic Client Registration; client metadata documents; token in URL path) and what happens when the server uses none of them. 3) Which MCP spec revision and transports are supported; read vs write confirmation behavior. 4) Known limits (tool count, response size, timeouts), bugs and workarounds reported by users in 2026. 5) How Gemini CLI/Antigravity CLI differ.
 [then Sources ... Final check]
 ```
 
