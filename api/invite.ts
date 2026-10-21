@@ -5,7 +5,7 @@
 // GET /api/invite  ->  { configured }  (no secrets) so the dialog can say whether email is ready.
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
-import { renderInviteEmail } from "./_lib/inviteEmail";
+import { renderInviteEmail } from "./_lib/inviteEmail.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
