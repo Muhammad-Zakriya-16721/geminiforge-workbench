@@ -66,9 +66,7 @@ function MoeLab() {
         ))}
       </div>
       <label className="lab-l">Model
-        <select className="field" value={model} onChange={(ev) => setModel(ev.target.value)}>
-          {Object.entries(MOE_CATALOG).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}
-        </select>
+        <Select label="Model" value={model} onChange={setModel} options={Object.entries(MOE_CATALOG).map(([k, v]) => ({ value: k, label: v.name }))} />
       </label>
       <label className="lab-l"><span><span>GPU VRAM</span><b className="mono">{vram.toFixed(0)} GB</b></span>
         <input type="range" min={0} max={48} step={1} value={vram} onChange={(ev) => setVram(Number(ev.target.value))} />

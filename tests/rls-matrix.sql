@@ -2,7 +2,7 @@
 -- Run it in the Supabase SQL editor or through the SQL tool; the last line of the error text lists PASS/FAIL per check.
 do $$
 declare
-  admin_id uuid; o uuid; p uuid; p2 uuid; tok text; res text := ''; fails int := 0; n int; b boolean; t text; j jsonb;
+  admin_id uuid; o uuid; o2 uuid; p uuid; p2 uuid; tok text; res text := ''; fails int := 0; n int; b boolean; t text; j jsonb;
   bob uuid := gen_random_uuid(); carol uuid := gen_random_uuid(); dave uuid := gen_random_uuid(); erin uuid := gen_random_uuid();
 begin
   select user_id into admin_id from public.app_admins order by created_at limit 1;
@@ -114,6 +114,39 @@ begin
   set local role authenticated;
   begin perform public.remove_org_member(o, admin_id); res := res || 'FAIL last owner left; '; exception when others then res := res || 'PASS the last owner cannot leave; '; end;
   begin perform public.set_org_role(o, admin_id, 'member'); res := res || 'FAIL last owner demoted; '; exception when others then res := res || 'PASS the last owner cannot be demoted; '; end;
+  -- organization lifecycle (rename, delete, restore, delete for good) and the invitation-mail limit
+  o2 := public.create_org('Temp Org', 'temp-org-x');
+  perform public.create_project(o2, 'Temp Project', 'temp-project-x');
+  perform public.rename_org(o2, 'Temp Org Renamed');
+  select name into t from public.organizations where id = o2;
+  res := res || case when t = 'Temp Org Renamed' then 'PASS an owner can rename the organization; ' else 'FAIL rename; ' end;
+  perform public.delete_org(o2);
+  reset role; -- archived projects are hidden from the read policy, so count them as the table owner
+  select count(*) into n from public.projects where org_id = o2 and archived_at is not null;
+  set local role authenticated;
+  res := res || case when n = 1 and not exists (select 1 from jsonb_array_elements(public.my_workspace() -> 'orgs') x where x ->> 'id' = o2::text) and exists (select 1 from jsonb_array_elements(public.my_workspace() -> 'deleted_orgs') x where x ->> 'id' = o2::text) then 'PASS delete hides the organization, archives its projects and lists it as deleted; ' else 'FAIL delete_org; ' end;
+  begin perform public.rename_org(o2, 'x'); res := res || 'FAIL renamed a deleted org; '; exception when others then res := res || 'PASS a deleted organization cannot be renamed; '; end;
+  perform public.restore_org(o2);
+  select count(*) into n from public.projects where org_id = o2 and archived_at is null;
+  res := res || case when n = 1 then 'PASS restore brings the projects back; ' else 'FAIL restore_org; ' end;
+  begin perform public.purge_org(o2); res := res || 'FAIL purged a live org; '; exception when others then res := res || 'PASS only a deleted organization can be removed for good; '; end;
+  perform public.delete_org(o2);
+  perform public.purge_org(o2);
+  select count(*) into n from public.organizations where id = o2;
+  res := res || case when n = 0 then 'PASS delete for good removes the organization and its projects; ' else 'FAIL purge_org; ' end;
+  for n in 1..20 loop perform public.invite_mail_gate(o); end loop;
+  begin perform public.invite_mail_gate(o); res := res || 'FAIL 21st invitation email in an hour allowed; '; exception when others then res := res || 'PASS the invitation email limit holds; '; end;
+  reset role;
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', bob, 'email', 'bob@example.test', 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform public.delete_org(o); res := res || 'FAIL a former member deleted the org; '; exception when others then res := res || 'PASS a former member cannot delete the organization; '; end;
+  begin perform public.rename_org(o, 'Hijack'); res := res || 'FAIL a former member renamed the org; '; exception when others then res := res || 'PASS a former member cannot rename the organization; '; end;
+  begin perform public.invite_mail_gate(o); res := res || 'FAIL a former member passed the mail gate; '; exception when others then res := res || 'PASS a former member cannot send invitation emails; '; end;
+  begin perform public.purge_project(p); res := res || 'FAIL a former member purged a project; '; exception when others then res := res || 'PASS a former member cannot delete a project for good; '; end;
+  reset role;
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', dave, 'email', 'dave@example.test', 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform public.delete_org(o); res := res || 'FAIL an outsider deleted the org; '; exception when others then res := res || 'PASS an outsider cannot delete the organization; '; end;
   reset role;
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
   set local role anon;

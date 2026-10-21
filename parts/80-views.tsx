@@ -75,36 +75,63 @@ function ThreadNav({ thread, active }: { thread: Thread; active: boolean }) {
 function initials(name: string) { const w = name.trim().split(/\s+/).filter(Boolean); return w.length ? (w[0][0] + (w[1]?.[0] ?? "")).toUpperCase() : "GF"; }
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
-  const { name, openSettings, setPalette } = useStore(useShallow((s) => ({ name: s.name, openSettings: s.openSettings, setPalette: s.setPalette })));
+  const { email, openSettings } = useStore(useShallow((s) => ({ email: s.cloudEmail, openSettings: s.openSettings })));
   const ref = useRef<HTMLDivElement | null>(null);
   useOutside(ref, onClose, true);
   useMenuNav(ref);
-  const item = (label: string, kb: string | null, run: () => void, Icon?: React.ElementType) => (
-    <button type="button" role="menuitem" className="menu-i" onClick={() => { onClose(); run(); }}><span style={{ display: "flex", alignItems: "center", gap: 10 }}>{Icon && <Icon size={15} aria-hidden />}{label}</span>{kb && <kbd>{kb}</kbd>}</button>
+  const item = (label: string, kb: string | null, run: () => void, Icon?: React.ElementType, danger = false) => (
+    <button type="button" role="menuitem" className={`menu-i ${danger ? "del" : ""}`} onClick={() => { onClose(); run(); }}><span className="mi-l">{Icon && <Icon size={15} aria-hidden />}{label}</span>{kb && <kbd>{kb}</kbd>}</button>
   );
   return (
-    <div className="menu up" ref={ref} role="menu" style={{ minWidth: 250 }}>
-      <div className="menu-id"><span className="avatar" aria-hidden>{initials(name)}</span><span><b>{name || "GeminiForge V20"}</b><span className="meta" style={{ margin: 0 }}>Saved in this browser</span></span></div>
+    <div className="menu up pm" ref={ref} role="menu" aria-label="Account">
+      <div className="menu-e">{email || "Not signed in"}</div>
       <div className="menu-sep" />
       {item("Settings", "Ctrl+,", () => openSettings("general"), Settings)}
-      {item("Features and help", null, () => openSettings("features"), ListChecks)}
+      {item("Features and help", null, () => openSettings("features"), CircleHelp)}
       {item("Keyboard shortcuts", null, () => openSettings("shortcuts"), Keyboard)}
       {item("Release notes", null, () => openSettings("about"), Info)}
       <div className="menu-sep" />
-      {item("Search", "Ctrl+K", () => setPalette(true), Search)}
       {item("Export backup", null, () => { exportBackup(); }, Download)}
       {item("Import backup", null, () => useStore.getState().setImportOpen(true), Upload)}
+      {CLOUD_AVAILABLE && <div className="menu-sep" />}
+      {CLOUD_AVAILABLE && (email ? item("Sign out", null, () => { void cloudSignOut().then(() => useStore.getState().go({ kind: "orgs" })); }, LogOut) : item("Sign in", null, () => useStore.getState().go({ kind: "orgs" }), LogOut))}
     </div>
+  );
+}
+
+function NavItem({ icon: Icon, label, active, onClick, badge, dim }: { icon?: React.ElementType; label: string; active?: boolean; onClick: () => void; badge?: React.ReactNode; dim?: boolean }) {
+  return (
+    <button type="button" className="nav" aria-current={active ? "page" : undefined} onClick={onClick}>
+      {Icon && <Icon size={15} aria-hidden />}<span className={`nav-t ${dim ? "dim" : ""}`}>{label}</span>{badge}
+    </button>
+  );
+}
+
+// a collapsible group of sidebar items; the choice is remembered
+function NavGroup({ id, label, count, dflt = true, force = false, children }: { id: string; label: string; count?: number; dflt?: boolean; force?: boolean; children: React.ReactNode }) {
+  const open = useStore((s) => s.open[`sb:${id}`] ?? dflt);
+  const toggle = useStore((s) => s.toggleOpen);
+  const shown = open || force;
+  return (
+    <>
+      <button type="button" className="nav-g" aria-expanded={shown} onClick={() => toggle(`sb:${id}`, dflt)}><ChevronDown size={12} aria-hidden />{label}{count != null && count > 0 && <span className="n">{count}</span>}</button>
+      {shown && children}
+    </>
   );
 }
 
 export function Sidebar() {
   const spec = useSpecVisible();
-  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name, isAdmin, isManager, projectId, hasOrgs, inboxCount, trashCount } = useStore(useShallow((s) => ({ isManager: s.isManager, projectId: s.projectId, hasOrgs: (s.workspace?.orgs.length ?? 0) > 0, isAdmin: s.isAdmin, inboxCount: s.inboxCount, trashCount: s.trashCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
-  const recents = threads.filter((t) => !t.archived).sort((a, b) => b.at - a.at).slice(0, 25);
+  const { view, go, setProject, pins, threads, sidebarOpen, set, menu, setMenu, tracker, name, email, isAdmin, isManager, projectId, workspace, inboxCount, trashCount } = useStore(useShallow((s) => ({ setProject: s.setProject, isManager: s.isManager, projectId: s.projectId, workspace: s.workspace, isAdmin: s.isAdmin, inboxCount: s.inboxCount, trashCount: s.trashCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name, email: s.cloudEmail })));
+  const [allRecents, setAllRecents] = useState(false);
+  const live = threads.filter((t) => !t.archived).sort((a, b) => b.at - a.at);
+  const recents = allRecents ? live.slice(0, 25) : live.slice(0, 5);
   const pinned = pins.map((k) => ({ k, info: pinInfo(k, threads) })).filter((x) => x.info);
   const done = DEEP_PROMPTS.filter((p) => tracker[p.id]?.status === "done").length;
   const cur = viewKey(view);
+  const inProject = !["orgs", "org", "join"].includes(view.kind);
+  const who = name || (email ? email.split("@")[0] : "GeminiForge V20");
+  const tag = !CLOUD_AVAILABLE ? "Local" : workspace?.super ? "Owner" : email ? "Member" : "Signed out";
   return (
     <nav className="side" aria-label="Primary" ref={inertRef(!sidebarOpen)}>
       <div className="side-in">
@@ -112,46 +139,70 @@ export function Sidebar() {
           <span className="brand"><i aria-hidden>✦</i>GeminiForge <span className="mono dim" style={{ fontSize: 12 }}>V20</span></span>
           <button type="button" className="icon-btn" aria-label="Collapse sidebar" title="Collapse sidebar (Ctrl B)" onClick={() => set({ sidebarOpen: false })}><PanelLeft size={17} aria-hidden /></button>
         </div>
-        <ProjectSwitcher />
-        <button type="button" className="side-search" onClick={() => setPalette(true)}><Search size={15} aria-hidden /><span>Search</span><kbd>Ctrl K</kbd></button>
+        {inProject && projectId && <ProjectSwitcher />}
         <div className="side-scroll">
-          <button type="button" className="nav" aria-current={view.kind === "home" ? "page" : undefined} onClick={() => go({ kind: "home" })}><Plus size={16} aria-hidden /><span className="nav-t">{spec ? "New question" : "Project home"}</span></button>
-          {spec && <button type="button" className="nav" aria-current={view.kind === "library" ? "page" : undefined} onClick={() => go({ kind: "library" })}><FolderKanban size={16} aria-hidden /><span className="nav-t">Library</span></button>}
-          {spec && <button type="button" className="nav" aria-current={view.kind === "tracker" ? "page" : undefined} onClick={() => go({ kind: "tracker" })}><List size={16} aria-hidden /><span className="nav-t">Tracker</span><span className="mono dim small">{done}/{DEEP_PROMPTS.length}</span></button>}
-          {spec && <button type="button" className="nav" aria-current={view.kind === "audit" ? "page" : undefined} onClick={() => go({ kind: "audit" })}><ListChecks size={16} aria-hidden /><span className="nav-t">Claims review</span></button>}
-          {projectId && <div className="side-sec">{spec ? "AI space" : "Project"}</div>}
-          {projectId && <button type="button" className="nav" aria-current={view.kind === "pages" ? "page" : undefined} onClick={() => go({ kind: "pages" })}><FileText size={16} aria-hidden /><span className="nav-t">Added pages</span></button>}
-          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "inbox" ? "page" : undefined} onClick={() => go({ kind: "inbox" })}><Inbox size={16} aria-hidden /><span className="nav-t">Review inbox</span>{inboxCount > 0 && <span className="mono small acc" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}</button>}
-          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "trash" ? "page" : undefined} onClick={() => go({ kind: "trash" })}><Trash2 size={16} aria-hidden /><span className="nav-t">Trash</span>{trashCount > 0 && <span className="mono small dim" aria-label={`${trashCount} in the Trash`}>{trashCount}</span>}</button>}
-          {isManager && <button type="button" className="nav" aria-current={view.kind === "access" ? "page" : undefined} onClick={() => go({ kind: "access" })}><KeyRound size={16} aria-hidden /><span className="nav-t">AI access</span></button>}
-          {hasOrgs && <button type="button" className="nav" aria-current={view.kind === "orgs" ? "page" : undefined} onClick={() => go({ kind: "orgs" })}><Building2 size={16} aria-hidden /><span className="nav-t">Organizations</span></button>}
-          {projectId && <button type="button" className="nav" aria-current={view.kind === "project" ? "page" : undefined} onClick={() => go({ kind: "project" })}><Settings size={16} aria-hidden /><span className="nav-t">Project settings</span></button>}
-
-          {spec && (<>
-          {pinned.length > 0 && <div className="side-sec">Pinned</div>}
-          {pinned.map(({ k, info }) => (
-            <button key={k} type="button" className="nav" aria-current={cur === k ? "page" : undefined} onClick={() => info!.run()}><Bookmark size={14} aria-hidden /><span className="nav-t">{info!.title}</span></button>
-          ))}
-
-          <div className="side-sec">Chapters</div>
-          {CHAPTERS.map((c, i) => (
-            <button key={c.id} type="button" className="nav" aria-current={cur === `chapter:${c.id}` ? "page" : undefined} onClick={() => go({ kind: "chapter", id: c.id })} title={c.subtitle}>
-              <span className="nav-n" aria-hidden>{i + 1}</span><span className="nav-t">{c.title}</span>
-            </button>
-          ))}
-
-          <div className="side-sec">Recents</div>
-          {recents.length === 0 && <p className="side-empty">Questions you ask are saved here.</p>}
-          {recents.map((t) => <ThreadNav key={t.id} thread={t} active={cur === `thread:${t.id}`} />)}
-          {threads.length > 0 && <button type="button" className="nav" aria-current={view.kind === "history" ? "page" : undefined} onClick={() => go({ kind: "history" })}><span className="nav-t dim">All questions ({threads.length})</span></button>}
+          {CLOUD_AVAILABLE && <NavItem icon={Building2} label="Organizations" active={view.kind === "orgs" || view.kind === "org"} onClick={() => go({ kind: "orgs" })} />}
+          {!inProject && workspace && workspace.orgs.length > 0 && (
+            <NavGroup id="orgs" label="Your organizations" count={workspace.orgs.length}>
+              {workspace.orgs.map((o) => <NavItem key={o.id} icon={Building2} label={o.name} active={view.kind === "org" && view.id === o.id} onClick={() => go({ kind: "org", id: o.id })} />)}
+            </NavGroup>
+          )}
+          {!inProject && workspace && workspace.projects.length > 0 && (
+            <NavGroup id="allp" label="Projects" count={workspace.projects.length}>
+              {workspace.projects.map((p) => <NavItem key={p.id} icon={FolderKanban} label={p.name} badge={<span className="small dim">{workspace.orgs.find((o) => o.id === p.org_id)?.name}</span>} onClick={() => { setProject(p.id); go({ kind: "home" }); }} />)}
+            </NavGroup>
+          )}
+          {inProject && (<>
+            <NavGroup id="proj" label="Project">
+              <NavItem icon={House} label="Overview" active={view.kind === "home"} onClick={() => go({ kind: "home" })} />
+              {spec && <NavItem icon={FolderKanban} label="Library" active={view.kind === "library"} onClick={() => go({ kind: "library" })} />}
+              {spec && <NavItem icon={List} label="Tracker" active={view.kind === "tracker"} onClick={() => go({ kind: "tracker" })} badge={<span className="mono dim small">{done}/{DEEP_PROMPTS.length}</span>} />}
+              {spec && <NavItem icon={ListChecks} label="Claims review" active={view.kind === "audit"} onClick={() => go({ kind: "audit" })} />}
+              {projectId && <NavItem icon={FileText} label="Added pages" active={view.kind === "pages"} onClick={() => go({ kind: "pages" })} />}
+            </NavGroup>
+            {spec && (
+              <NavGroup id="chap" label="Chapters" count={CHAPTERS.length} dflt={false} force={view.kind === "chapter"}>
+                {CHAPTERS.map((c, i) => (
+                  <button key={c.id} type="button" className="nav" aria-current={cur === `chapter:${c.id}` ? "page" : undefined} onClick={() => go({ kind: "chapter", id: c.id })} title={c.subtitle}>
+                    <span className="nav-n" aria-hidden>{i + 1}</span><span className="nav-t">{c.title}</span>
+                  </button>
+                ))}
+              </NavGroup>
+            )}
+            {spec && pinned.length > 0 && (
+              <NavGroup id="pins" label="Pinned" count={pinned.length}>
+                {pinned.map(({ k, info }) => <NavItem key={k} icon={Bookmark} label={info!.title} active={cur === k} onClick={() => info!.run()} />)}
+              </NavGroup>
+            )}
+            {spec && (
+              <NavGroup id="ask" label="Questions" count={live.length}>
+                {recents.length === 0 && <p className="side-empty">Questions you ask are saved here.</p>}
+                {recents.map((t) => <ThreadNav key={t.id} thread={t} active={cur === `thread:${t.id}`} />)}
+                {live.length > 5 && !allRecents && <NavItem label={`Show more (${Math.min(live.length, 25) - 5})`} dim onClick={() => setAllRecents(true)} />}
+                {threads.length > 0 && <NavItem label={`All questions (${threads.length})`} dim active={view.kind === "history"} onClick={() => go({ kind: "history" })} />}
+              </NavGroup>
+            )}
+            {isAdmin && (
+              <NavGroup id="rev" label="Review">
+                <NavItem icon={Inbox} label="Review inbox" active={view.kind === "inbox"} onClick={() => go({ kind: "inbox" })} badge={inboxCount > 0 ? <span className="mono small acc" aria-label={`${inboxCount} waiting`}>{inboxCount}</span> : undefined} />
+                <NavItem icon={Trash2} label="Trash" active={view.kind === "trash"} onClick={() => go({ kind: "trash" })} badge={trashCount > 0 ? <span className="mono small dim" aria-label={`${trashCount} in the Trash`}>{trashCount}</span> : undefined} />
+              </NavGroup>
+            )}
+            {isManager && (
+              <NavGroup id="man" label="Manage">
+                <NavItem icon={KeyRound} label="AI access" active={view.kind === "access"} onClick={() => go({ kind: "access" })} />
+                <NavItem icon={Settings} label="Settings and people" active={view.kind === "project"} onClick={() => go({ kind: "project" })} />
+              </NavGroup>
+            )}
           </>)}
         </div>
         <div className="side-foot">
           {menu && <ProfileMenu onClose={() => setMenu(false)} />}
           <button type="button" className="foot-btn" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-            <span className="avatar" aria-hidden>{initials(name)}</span>
-            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontWeight: 500 }}>{name || "GeminiForge V20"}</span><span className="meta" style={{ margin: 0 }}>Specification workbench</span></span>
-            <ChevronDown size={15} aria-hidden style={{ transform: "rotate(180deg)", color: "var(--tx3)" }} />
+            <span className="avatar" aria-hidden>{initials(who)}</span>
+            <span className="fb-n">{who}</span>
+            <span className="fb-p">{tag}</span>
+            <ChevronDown size={14} aria-hidden className="chev" />
           </button>
         </div>
       </div>
@@ -159,22 +210,73 @@ export function Sidebar() {
   );
 }
 
-export function Header() {
-  const { view, sidebarOpen, set, setPalette, pins, togglePin, threads } = useStore(useShallow((s) => ({ view: s.view, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, pins: s.pins, togglePin: s.togglePin, threads: s.threads })));
+interface Crumb { label: string; go?: () => void; menu?: MenuEntry[]; menuLabel?: string }
+
+function useCrumbs(): Crumb[] {
+  const { view, workspace, projectId, threads, go, setProject } = useStore(useShallow((s) => ({ view: s.view, workspace: s.workspace, projectId: s.projectId, threads: s.threads, go: s.go, setProject: s.setProject })));
+  const app: Crumb = { label: "GeminiForge V20", go: () => go(CLOUD_AVAILABLE ? { kind: "orgs" } : { kind: "home" }) };
+  if (view.kind === "orgs") return [app, { label: "Organizations" }];
+  if (view.kind === "join") return [app, { label: "Invitation" }];
+  const orgMenu = (cur: string): MenuEntry[] => (workspace?.orgs ?? []).map((o) => ({ label: o.name, current: o.id === cur, run: () => go({ kind: "org", id: o.id }) }));
+  if (view.kind === "org") {
+    const o = workspace?.orgs.find((x) => x.id === view.id);
+    return [app, { label: o?.name ?? "Organization", menu: workspace && workspace.orgs.length > 1 ? orgMenu(view.id) : undefined, menuLabel: "Switch organization" }];
+  }
+  const p = workspace?.projects.find((x) => x.id === projectId);
+  const o = workspace?.orgs.find((x) => x.id === p?.org_id);
   const chapter = view.kind === "chapter" ? CHAPTERS.find((c) => c.id === view.id) : undefined;
   const thread = view.kind === "thread" ? threads.find((t) => t.id === view.id) : undefined;
-  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "pages" ? "Added pages" : view.kind === "trash" ? "Trash" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : view.kind === "orgs" ? "Organizations" : view.kind === "project" ? "Project" : view.kind === "join" ? "Invitation" : "New question";
+  const page = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : ({ library: "Library", tracker: "Tracker", history: "All questions", audit: "Claims review", pages: "Added pages", trash: "Trash", inbox: "Review inbox", access: "AI access", project: "Settings and people" } as Record<string, string>)[view.kind];
+  const out: Crumb[] = [app];
+  if (p && o) {
+    out.push({ label: o.name, go: () => go({ kind: "org", id: o.id }), menu: workspace!.orgs.length > 1 ? orgMenu(o.id) : undefined, menuLabel: "Switch organization" });
+    out.push({ label: "Projects", go: () => go({ kind: "org", id: o.id }) });
+    const sibs = workspace!.projects.filter((x) => x.org_id === o.id);
+    out.push({ label: p.name, go: page ? () => go({ kind: "home" }) : undefined, menu: sibs.length > 1 ? sibs.map((x) => ({ label: x.name, current: x.id === p.id, run: () => { setProject(x.id); go({ kind: "home" }); } })) : undefined, menuLabel: "Switch project" });
+  }
+  if (page) out.push({ label: page });
+  return out;
+}
+
+export function Header() {
+  const { view, sidebarOpen, set, setPalette, pins, togglePin, threads, isAdmin, inboxCount, go, notify, openSettings } = useStore(useShallow((s) => ({ view: s.view, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, pins: s.pins, togglePin: s.togglePin, threads: s.threads, isAdmin: s.isAdmin, inboxCount: s.inboxCount, go: s.go, notify: s.notify, openSettings: s.openSettings })));
+  const crumbs = useCrumbs();
+  const spec = useSpecVisible();
+  const chapter = view.kind === "chapter" ? CHAPTERS.find((c) => c.id === view.id) : undefined;
+  const thread = view.kind === "thread" ? threads.find((t) => t.id === view.id) : undefined;
   const key = viewKey(view);
   const pinnable = !!chapter || !!thread;
+  const inProject = !["orgs", "org", "join"].includes(view.kind);
   return (
     <header className="top">
       {!sidebarOpen && <button type="button" className="icon-btn" aria-label="Open sidebar" title="Open sidebar (Ctrl B)" onClick={() => set({ sidebarOpen: true })}><PanelLeft size={17} aria-hidden /></button>}
-      <div className="crumb">
-        <span className="crumb-p">GeminiForge V20</span><span className="crumb-s" aria-hidden>/</span><span className="crumb-t">{title}</span>
-      </div>
+      <nav aria-label="Breadcrumb" style={{ minWidth: 0 }}>
+        <ol className="crumbs">
+          {crumbs.map((c, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <li key={i}>
+                {i > 0 && <span className="crumb-sep" aria-hidden><ChevronRight size={13} /></span>}
+                {last ? <span className="crumb-cur" aria-current="page" title={c.label}>{c.label}</span> : c.go ? <button type="button" className="crumb-b" title={c.label} onClick={c.go}>{c.label}</button> : <span className="crumb-b" style={{ pointerEvents: "none" }}>{c.label}</span>}
+                {c.menu && <ActionMenu items={c.menu} label={c.menuLabel ?? "Switch"} className="crumb-sw" icon={ChevronsUpDown} align="start" minW={220} />}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
       <span className="top-sp" />
+      <button type="button" className="tsearch" aria-label="Search" title="Search (Ctrl K)" onClick={() => setPalette(true)}><Search size={14} aria-hidden /><span>Search</span><kbd>Ctrl K</kbd></button>
+      {isAdmin && inProject && <button type="button" className="icon-btn bell" aria-label={inboxCount > 0 ? `Review inbox, ${inboxCount} waiting` : "Review inbox"} title="Review inbox" onClick={() => go({ kind: "inbox" })}><Bell size={16} aria-hidden />{inboxCount > 0 && <span className="bd" aria-hidden>{inboxCount > 99 ? "99+" : inboxCount}</span>}</button>}
       {pinnable && <button type="button" className="icon-btn" aria-pressed={pins.includes(key)} aria-label={pins.includes(key) ? "Unpin" : "Pin"} title={pins.includes(key) ? "Unpin" : "Pin"} onClick={() => togglePin(key)}><Bookmark size={16} aria-hidden fill={pins.includes(key) ? "currentColor" : "none"} /></button>}
-      <button type="button" className="icon-btn" aria-label="Search" title="Search (Ctrl K)" onClick={() => setPalette(true)}><Search size={16} aria-hidden /></button>
+      <ActionMenu label="More" items={[
+        { label: "Copy link to this page", icon: Link2, run: () => void copyText(window.location.href).then((ok) => notify(ok ? "Link copied" : "Could not copy the link")) },
+        { label: "Print", icon: Printer, kbd: "Ctrl+P", run: () => window.print() },
+        ...(spec && inProject ? [{ label: "Export workbook (.md)", icon: Download, run: () => { void exportFile("geminiforge_v20_workbook.md", buildMarkdown(), "text/markdown"); } }] : []),
+        { label: "", sep: true, run: () => undefined },
+        { label: sidebarOpen ? "Hide sidebar" : "Show sidebar", icon: PanelLeft, kbd: "Ctrl+B", run: () => set({ sidebarOpen: !sidebarOpen }) },
+        { label: "Keyboard shortcuts", icon: Keyboard, run: () => openSettings("shortcuts") },
+        { label: "Features and help", icon: CircleHelp, run: () => openSettings("features") }
+      ]} />
     </header>
   );
 }
@@ -196,7 +298,7 @@ export function OutlineRail({ sections, active, onGo }: { sections: Section[]; a
 }
 
 export function HomeView({ onSubmit }: { onSubmit: (t: string) => void }) {
-  const { last, threads, tracker, go, openPane, userName, notes, lastExport, backupNudge, set } = useStore(useShallow((s) => ({ last: s.last, threads: s.threads, tracker: s.tracker, go: s.go, openPane: s.openPane, userName: s.name, notes: s.notes, lastExport: s.lastExport, backupNudge: s.backupNudge, set: s.set })));
+  const { projectId, isAdmin, last, threads, tracker, go, openPane, userName, notes, lastExport, backupNudge, set } = useStore(useShallow((s) => ({ projectId: s.projectId, isAdmin: s.isAdmin, last: s.last, threads: s.threads, tracker: s.tracker, go: s.go, openPane: s.openPane, userName: s.name, notes: s.notes, lastExport: s.lastExport, backupNudge: s.backupNudge, set: s.set })));
   const greeting = useMemo(nowGreeting, []);
   const nextPrompt = DEEP_PROMPTS.find((p) => (tracker[p.id]?.status ?? "todo") !== "done");
   const lastChapter = last.kind === "chapter" ? CHAPTERS.find((c) => c.id === last.id) : undefined;
@@ -232,6 +334,15 @@ export function HomeView({ onSubmit }: { onSubmit: (t: string) => void }) {
           <button key={x} type="button" className="chipbtn" onClick={() => onSubmit(x)}>{x}</button>
         ))}
       </div>
+      <section aria-label="Documents">
+        <h2 className="sec-h" style={{ marginTop: 30 }}>Documents</h2>
+        <div className="doccards">
+          {CHAPTERS.map((c) => (
+            <button key={c.id} type="button" className="dcard" onClick={() => go({ kind: "chapter", id: c.id })}><span className="dn">Chapter {c.num}</span><b>{c.title}</b><span>{c.subtitle}</span></button>
+          ))}
+        </div>
+      </section>
+      {projectId && <NativePages projectId={projectId} canCreate={isAdmin} />}
       {items.length > 0 && (
         <section aria-label="Jump back in">
           <h2 className="jb-h">Jump back in</h2>
@@ -420,57 +531,101 @@ export function TrackerView() {
   );
 }
 
+type PalRow = { id: string; title: string; sub: string; group: string; sect: string; run: () => void };
+const PAL_SCOPES: [string, string][] = [["all", "All"], ["docs", "Documents"], ["ask", "Questions"], ["notes", "Notes"], ["proj", "Projects"], ["act", "Actions"]];
+const PAL_PREFIX: Record<string, string> = { ">": "act", "#": "docs", "@": "proj", "?": "act" };
+
 export function Palette() {
-  const { open, setPalette, go, openPane, set, motion: mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin, isManager, projectId } = useStore(useShallow((s) => ({ isManager: s.isManager, projectId: s.projectId, contentRev: s.contentRev, isAdmin: s.isAdmin, open: s.palette, setPalette: s.setPalette, go: s.go, openPane: s.openPane, set: s.set, motion: s.motion, resetAll: s.resetAll, sidebarOpen: s.sidebarOpen, pane: s.pane, threads: s.threads, notes: s.notes })));
+  const { open, setPalette, go, openPane, set, motion: mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin, isManager, projectId, workspace, setProject, pins } = useStore(useShallow((s) => ({ isManager: s.isManager, projectId: s.projectId, workspace: s.workspace, setProject: s.setProject, pins: s.pins, contentRev: s.contentRev, isAdmin: s.isAdmin, open: s.palette, setPalette: s.setPalette, go: s.go, openPane: s.openPane, set: s.set, motion: s.motion, resetAll: s.resetAll, sidebarOpen: s.sidebarOpen, pane: s.pane, threads: s.threads, notes: s.notes })));
+  const spec = useSpecVisible();
   const dlg = useRef<HTMLDialogElement | null>(null);
   const list = useRef<HTMLDivElement | null>(null);
   const [q, setQ] = useState("");
+  const [scope, setScope] = useState("all");
   const [sel, setSel] = useState(0);
+  const [pageHits, setPageHits] = useState<{ ref: string; title: string }[]>([]);
 
   useEffect(() => {
     const d = dlg.current;
     if (!d) return;
-    if (open && !d.open) { setQ(""); setSel(0); d.showModal(); }
+    if (open && !d.open) { setQ(""); setScope("all"); setSel(0); d.showModal(); }
     if (!open && d.open) d.close();
   }, [open]);
 
-  const rows = useMemo(() => {
-    const actions: { id: string; title: string; sub: string; group: string; run: () => void }[] = [
-      { id: "a-new", title: "New question", sub: "Go to the start page", group: "Action", run: () => go({ kind: "home" }) },
-      { id: "a-lib", title: "Open library", sub: "All crates, packs, prompts, patches and labs", group: "Action", run: () => go({ kind: "library" }) },
-      { id: "a-trk", title: "Open tracker", sub: "Prompts 01 to 14 and prototype spikes", group: "Action", run: () => go({ kind: "tracker" }) },
-      { id: "a-his", title: "Open all questions", sub: "Search, restore and delete saved questions", group: "Action", run: () => go({ kind: "history" }) },
-      { id: "a-aud", title: "Open claims review", sub: "Facts to re-check in the documentation", group: "Action", run: () => go({ kind: "audit" }) },
-      ...(isAdmin ? [
-        { id: "a-inbox", title: "Open the AI review inbox", sub: "Edits proposed by AI tools, waiting for your decision", group: "Action", run: () => go({ kind: "inbox" }) },
-        { id: "a-trash", title: "Open the Trash", sub: "Deleted edits and pages, restore or delete for good", group: "Action", run: () => go({ kind: "trash" }) },
-      ] : []),
-      ...(isManager ? [{ id: "a-access", title: "Open AI access", sub: "Tokens, activity and the pause switch", group: "Action", run: () => go({ kind: "access" }) }] : []),
-      ...(projectId ? [
-        { id: "a-orgs", title: "Open organizations and members", sub: "Projects, people and invitations", group: "Action", run: () => go({ kind: "orgs" }) },
-        { id: "a-proj", title: "Open project settings", sub: "Name, visibility, who has access", group: "Action", run: () => go({ kind: "project" }) }
-      ] : []),
-      { id: "a-sb", title: sidebarOpen ? "Collapse sidebar" : "Expand sidebar", sub: "Ctrl B", group: "Action", run: () => set({ sidebarOpen: !sidebarOpen }) },
-      ...(pane ? [{ id: "a-pane", title: "Close side panel", sub: "", group: "Action", run: () => openPane(null) }] : []),
-      { id: "a-m1", title: "Animations: full motion", sub: mm === "full" ? "Current setting" : "", group: "Action", run: () => set({ motion: "full" }) },
-      { id: "a-m2", title: "Animations: reduced motion", sub: mm === "reduced" ? "Current setting" : "", group: "Action", run: () => set({ motion: "reduced" }) },
-      { id: "a-m3", title: "Animations: match system", sub: mm === "system" ? "Current setting" : "", group: "Action", run: () => set({ motion: "system" }) },
-      { id: "a-exj", title: "Export backup (.json)", sub: "Pins, notes, tracker, questions, settings", group: "Action", run: () => { exportBackup(); } },
-      { id: "a-exm", title: "Export document (.md)", sub: "Whole workbook as one Markdown file", group: "Action", run: () => { void exportFile("geminiforge_v20_workbook.md", buildMarkdown(), "text/markdown"); } },
-      { id: "a-imp", title: "Import backup", sub: "Replace data from a backup file", group: "Action", run: () => useStore.getState().setImportOpen(true) },
-      { id: "a-reset", title: "Reset saved data", sub: "Erase pins, notes, tracker and questions", group: "Action", run: () => resetAll() }
-    ];
-    const parts = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const acts = actions.filter((a) => parts.every((p) => `${a.title} ${a.sub}`.toLowerCase().includes(p)));
-    const found = searchIndex(q).map((it) => ({ id: it.key, title: it.title, sub: it.sub, group: it.badge ?? "", run: () => { if (it.view) go(it.view); if (it.ref) openPane(it.ref); } }));
-    const mine = parts.length ? [
-      ...threads.filter((t) => parts.every((w) => `${t.title} ${t.turns.map((u) => u.text).join(" ")}`.toLowerCase().includes(w))).slice(0, 5).map((t) => ({ id: `thread:${t.id}`, title: t.title, sub: t.archived ? "Saved question (archived)" : "Saved question", group: "Question", run: () => go({ kind: "thread", id: t.id }) })),
-      ...notes.filter((n) => parts.every((w) => n.text.toLowerCase().includes(w))).slice(0, 5).map((n) => ({ id: `note:${n.id}`, title: clip(n.text.replace(/\s+/g, " "), 70), sub: `Note on ${sourceInfo(n.ref)?.title ?? n.ref}`, group: "Note", run: () => sourceInfo(n.ref)?.run() }))
-    ] : [];
-    return [...(parts.length ? found.slice(0, 40) : found.filter((f) => f.id.startsWith("chapter:") || f.id.startsWith("lab:")).slice(0, 12)), ...mine, ...acts].slice(0, 60);
-  }, [q, go, openPane, set, mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin, isManager, projectId]);
+  const prefix = PAL_PREFIX[q[0] ?? ""];
+  const sc = prefix ?? scope;
+  const qq = (prefix ? q.slice(1) : q).trim();
 
-  useEffect(() => { setSel(0); }, [q]);
+  useEffect(() => {
+    if (!open || !projectId || qq.length < 2) { setPageHits([]); return; }
+    let off = false;
+    const t = setTimeout(() => { void searchPages(projectId, qq).then((r) => { if (!off) setPageHits(r); }); }, 220);
+    return () => { off = true; clearTimeout(t); };
+  }, [open, projectId, qq]);
+
+  const rows = useMemo(() => {
+    const cur = workspace?.projects.find((p) => p.id === projectId);
+    const curOrg = workspace?.orgs.find((o) => o.id === cur?.org_id);
+    const R = (sect: string, id: string, title: string, sub: string, group: string, run: () => void): PalRow => ({ id, title, sub, group, sect, run });
+    const actions: PalRow[] = [
+      ...(CLOUD_AVAILABLE ? [R("Actions", "a-orgs", "Open organizations", "All your organizations", "Action", () => go({ kind: "orgs" }))] : []),
+      ...(curOrg && (workspace?.super || curOrg.role === "owner" || curOrg.role === "admin") ? [R("Actions", "a-inv", "Invite someone", `To ${curOrg.name}`, "Action", () => go({ kind: "org", id: curOrg.id, tab: "invitations" })), R("Actions", "a-newp", "New project", `In ${curOrg.name}`, "Action", () => go({ kind: "org", id: curOrg.id }))] : []),
+      ...(projectId ? [R("Actions", "a-new", spec ? "New question" : "Project overview", "Go to the project start page", "Action", () => go({ kind: "home" }))] : []),
+      ...(spec ? [
+        R("Actions", "a-lib", "Open library", "All crates, packs, prompts, patches and labs", "Action", () => go({ kind: "library" })),
+        R("Actions", "a-trk", "Open tracker", "Prompts 01 to 14 and prototype spikes", "Action", () => go({ kind: "tracker" })),
+        R("Actions", "a-his", "Open all questions", "Search, restore and delete saved questions", "Action", () => go({ kind: "history" })),
+        R("Actions", "a-aud", "Open claims review", "Facts to re-check in the documentation", "Action", () => go({ kind: "audit" }))
+      ] : []),
+      ...(projectId ? [R("Actions", "a-pages", "Open added pages", "Pages you wrote or AI proposed", "Action", () => go({ kind: "pages" }))] : []),
+      ...(isAdmin ? [
+        R("Actions", "a-inbox", "Open the AI review inbox", "Edits proposed by AI tools, waiting for your decision", "Action", () => go({ kind: "inbox" })),
+        R("Actions", "a-trash", "Open the Trash", "Deleted edits and pages, restore or delete for good", "Action", () => go({ kind: "trash" }))
+      ] : []),
+      ...(isManager ? [R("Actions", "a-access", "Open AI access", "Tokens, activity and the pause switch", "Action", () => go({ kind: "access" })), R("Actions", "a-proj", "Open project settings and people", "Name, visibility, who has access", "Action", () => go({ kind: "project" }))] : []),
+      R("Actions", "a-sb", sidebarOpen ? "Collapse sidebar" : "Expand sidebar", "Ctrl B", "Action", () => set({ sidebarOpen: !sidebarOpen })),
+      ...(pane ? [R("Actions", "a-pane", "Close side panel", "", "Action", () => openPane(null))] : []),
+      R("Actions", "a-m1", "Animations: full motion", mm === "full" ? "Current setting" : "", "Action", () => set({ motion: "full" })),
+      R("Actions", "a-m2", "Animations: reduced motion", mm === "reduced" ? "Current setting" : "", "Action", () => set({ motion: "reduced" })),
+      R("Actions", "a-m3", "Animations: match system", mm === "system" ? "Current setting" : "", "Action", () => set({ motion: "system" })),
+      R("Actions", "a-exj", "Export backup (.json)", "Pins, notes, tracker, questions, settings", "Action", () => { exportBackup(); }),
+      ...(spec ? [R("Actions", "a-exm", "Export document (.md)", "Whole workbook as one Markdown file", "Action", () => { void exportFile("geminiforge_v20_workbook.md", buildMarkdown(), "text/markdown"); })] : []),
+      R("Actions", "a-imp", "Import backup", "Replace data from a backup file", "Action", () => useStore.getState().setImportOpen(true)),
+      R("Actions", "a-reset", "Reset saved data", "Erase pins, notes, tracker and questions", "Action", () => resetAll())
+    ];
+    const parts = qq.toLowerCase().split(/\s+/).filter(Boolean);
+    const all = (t: string) => parts.every((w) => t.toLowerCase().includes(w));
+    const projRows: PalRow[] = workspace ? [
+      ...workspace.orgs.map((o) => R("Organizations and projects", `org:${o.id}`, o.name, `Organization · ${ROLE_NAME[o.role]}`, "Organization", () => go({ kind: "org", id: o.id }))),
+      ...workspace.projects.map((p) => R("Organizations and projects", `proj:${p.id}`, p.name, `Project · ${workspace.orgs.find((o) => o.id === p.org_id)?.name ?? ""} · ${ROLE_NAME[p.role]}`, "Project", () => { setProject(p.id); go({ kind: "home" }); }))
+    ] : [];
+    const docRows: PalRow[] = spec ? searchIndex(qq).map((it) => R("Documents", it.key, it.title, it.sub, it.badge ?? "", () => { if (it.view) go(it.view); if (it.ref) openPane(it.ref); })) : [];
+    const pageRows: PalRow[] = pageHits.map((h) => R("Added pages", `page:${h.ref}`, h.title, "Added page", "Page", () => go({ kind: "pages", ref: h.ref })));
+    const askRows: PalRow[] = threads.filter((t) => all(`${t.title} ${t.turns.map((u) => u.text).join(" ")}`)).slice(0, 8).map((t) => R("Questions", `thread:${t.id}`, t.title, t.archived ? "Saved question (archived)" : "Saved question", "Question", () => go({ kind: "thread", id: t.id })));
+    const noteRows: PalRow[] = notes.filter((n) => all(n.text)).slice(0, 8).map((n) => R("Notes", `note:${n.id}`, clip(n.text.replace(/\s+/g, " "), 70), `Note on ${sourceInfo(n.ref)?.title ?? n.ref}`, "Note", () => sourceInfo(n.ref)?.run()));
+    if (!parts.length) {
+      if (sc !== "all") {
+        if (sc === "docs") return [...docRows.filter((f) => f.id.startsWith("chapter:") || f.id.startsWith("lab:")).slice(0, 14)];
+        if (sc === "proj") return projRows;
+        if (sc === "act") return actions;
+        if (sc === "ask") return threads.slice(0, 20).map((t) => R("Questions", `thread:${t.id}`, t.title, "Saved question", "Question", () => go({ kind: "thread", id: t.id })));
+        return notes.slice(0, 20).map((n) => R("Notes", `note:${n.id}`, clip(n.text.replace(/\s+/g, " "), 70), `Note on ${sourceInfo(n.ref)?.title ?? n.ref}`, "Note", () => sourceInfo(n.ref)?.run()));
+      }
+      const recentPins = pins.map((k) => ({ k, info: pinInfo(k, threads) })).filter((x) => x.info).slice(0, 3).map((x) => R("Recent", `pin:${x.k}`, x.info!.title, "Pinned", "Pinned", () => x.info!.run()));
+      const recentThreads = threads.filter((t) => !t.archived).sort((a, b) => b.at - a.at).slice(0, 3).map((t) => R("Recent", `thread:${t.id}`, t.title, "Saved question", "Question", () => go({ kind: "thread", id: t.id })));
+      return [...recentPins, ...recentThreads, ...projRows.slice(0, 6), ...docRows.filter((f) => f.id.startsWith("chapter:")).slice(0, 6), ...actions.slice(0, 6)];
+    }
+    const acts = actions.filter((a) => all(`${a.title} ${a.sub}`));
+    const projHit = projRows.filter((r) => all(`${r.title} ${r.sub}`));
+    if (sc === "docs") return [...pageRows, ...docRows.slice(0, 40)];
+    if (sc === "ask") return askRows;
+    if (sc === "notes") return noteRows;
+    if (sc === "proj") return projHit;
+    if (sc === "act") return acts;
+    return [...projHit.slice(0, 4), ...pageRows, ...docRows.slice(0, 30), ...askRows.slice(0, 5), ...noteRows.slice(0, 5), ...acts].slice(0, 60);
+  }, [qq, sc, go, openPane, set, mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin, isManager, projectId, workspace, setProject, pins, pageHits, spec]);
+
+  useEffect(() => { setSel(0); }, [q, scope]);
   useEffect(() => { list.current?.querySelector(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);
 
   const choose = (i: number) => { const r = rows[i]; if (!r) return; setPalette(false); r.run(); };
@@ -480,25 +635,32 @@ export function Palette() {
     else if (e.key === "Home") { e.preventDefault(); setSel(0); }
     else if (e.key === "End") { e.preventDefault(); setSel(Math.max(0, rows.length - 1)); }
     else if (e.key === "Enter") { e.preventDefault(); choose(sel); }
+    else if (e.key === "Backspace" && q === "" && scope !== "all") { e.preventDefault(); setScope("all"); }
   };
 
   return (
     <dialog ref={dlg} className="pal" aria-label="Search" onClose={() => setPalette(false)} onClick={(e) => { if (e.target === dlg.current) setPalette(false); }}>
       <div className="pal-in">
         <Search size={17} aria-hidden style={{ color: "var(--acc)" }} />
-        <input role="combobox" aria-expanded="true" aria-controls="pal-list" aria-autocomplete="list" aria-activedescendant={rows[sel] ? `pal-${sel}` : undefined} aria-label="Search chapters, crates, packs, prompts and actions" placeholder="Search chapters, crates, packs, prompts, actions" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} autoFocus />
+        <input role="combobox" aria-expanded="true" aria-controls="pal-list" aria-autocomplete="list" aria-activedescendant={rows[sel] ? `pal-${sel}` : undefined} aria-label="Search documents, questions, projects and actions" placeholder="Search, or type > actions  # documents  @ projects" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} autoFocus />
         <kbd>Esc</kbd>
       </div>
+      <div className="pal-tabs" role="group" aria-label="Search in">
+        {PAL_SCOPES.map(([id, label]) => <button key={id} type="button" aria-pressed={sc === id} onClick={() => { setScope(id); if (prefix) setQ(q.slice(1)); }}>{label}</button>)}
+      </div>
       <div className="pal-list" id="pal-list" role="listbox" aria-label="Results" ref={list}>
-        {rows.length === 0 && <p className="meta" style={{ padding: 16 }}>Nothing matches “{q}”.</p>}
+        {rows.length === 0 && <p className="meta" style={{ padding: 16 }}>Nothing matches “{qq}”.</p>}
         {rows.map((r, i) => (
-          <div key={r.id} id={`pal-${i}`} data-i={i} role="option" aria-selected={i === sel} className="pal-i" onMouseMove={() => setSel(i)} onClick={() => choose(i)}>
-            <div className="pal-t">{r.title}{r.sub && <small>{r.sub}</small>}</div>
-            <span className="pal-g">{r.group}</span>
-          </div>
+          <React.Fragment key={r.id}>
+            {(i === 0 || rows[i - 1].sect !== r.sect) && <div className="pal-gh" aria-hidden>{r.sect}</div>}
+            <div id={`pal-${i}`} data-i={i} role="option" aria-selected={i === sel} className="pal-i" onMouseMove={() => setSel(i)} onClick={() => choose(i)}>
+              <div className="pal-t">{r.title}{r.sub && <small>{r.sub}</small>}</div>
+              <span className="pal-g">{r.group}</span>
+            </div>
+          </React.Fragment>
         ))}
       </div>
-      <div className="pal-ft"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span>{rows.length} results</span></div>
+      <div className="pal-ft"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span aria-live="polite">{rows.length} results</span></div>
     </dialog>
   );
 }

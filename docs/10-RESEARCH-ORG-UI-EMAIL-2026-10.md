@@ -1,0 +1,49 @@
+# Research 2026-10-21: workspace UI patterns, invitation email, Gemini Deep Research, file hand-over
+
+Method: three sourced web-research passes. "UNVERIFIED" = not confirmed from a fetched page. Numbers for hover pills are our own choice, not copied from any product.
+
+## A. Breadcrumbs, lists, sidebar, search, menus
+**Breadcrumbs**
+- W3C APG: no special keyboard model; a `nav` landmark with `aria-label`, `ol > li > a`; last item `aria-current="page"` (https://www.w3.org/WAI/ARIA/apg/patterns/breadcrumb/).
+- Carbon: never wrap; when short show first + last two, middle in an overflow menu; phone: overflow + one crumb (https://carbondesignsystem.com/components/breadcrumb/usage/). Atlassian: collapsed items = ellipsis labelled "Show more breadcrumbs"; apps with a sidebar may drop the top level (https://atlassian.design/components/breadcrumbs/usage). NN/g: show location, not history; current page last and unlinked (https://www.nngroup.com/articles/breadcrumbs/).
+- Notion shows sibling pages when hovering a crumb (third-party source only). Supabase moved to one organization at a time with an org picker in the header and an `/organizations` page (https://supabase.com/changelog/33670-upcoming-breaking-change-to-dashboard-navigation). Linear/GitHub/Figma/Drive crumb behaviour: UNVERIFIED.
+- Rules adopted: crumb items are link + small chevron button that opens a sibling list (click, not hover only); middle crumbs hidden on narrow screens; link height >= 24px.
+
+**Org / project list pages**
+- Vercel: grid/list toggle saved per user, sort by activity/name, find bar, "Add New" (https://vercel.com/docs/projects/managing-projects). Delete = typed project name; "Pause" offered as a softer option.
+- Supabase roles Owner/Administrator/Developer/Read-only; invites expire in 24h, can be revoked and resent; an org needs at least one owner (https://supabase.com/docs/guides/platform/access-control). GitHub org delete: typed name, irreversible warning, alternatives offered (https://docs.github.com/en/organizations/managing-organization-settings/deleting-an-organization-account).
+- NN/g confirmations: name the item and consequences, label buttons by outcome, prefer undo, typed confirmation only for rare high-stakes actions (https://www.nngroup.com/articles/confirmation-dialog/). Carbon empty states: first use / no results / error; title, body, action (https://carbondesignsystem.com/patterns/empty-states-pattern/).
+- Rules adopted: one toolbar (search, sort, view toggle persisted, one primary create button); three empty-state kinds; invitations always reachable (header button on org and project pages, command palette, and the pending-invite entry); danger zone at the bottom of Settings; soft delete first with restore, typed name for permanent delete.
+
+**Sidebar**: Notion sections Recents/Favorites/Teamspaces, each collapsible, Trash/Help pinned at the bottom (https://www.notion.com/help/sidebar). Linear: hide rare items behind "More", counts only for actionable things (https://linear.app/changelog/2024-12-18-personalized-sidebar). Rule: sidebar = navigation inside the current project; account, org settings and members live elsewhere; badges only for actionable counts; collapsible sections with remembered state.
+
+**Search / palette**: GitHub prefixes `>` `#` `@` `/` `?`, scope chip (https://docs.github.com/en/get-started/accessibility/github-command-palette); Linear/Notion show recents on empty query and have filters (https://linear.app/docs/search, https://www.notion.com/help/search); Vercel palette is desktop-only so a mobile search button is needed. APG list-autocomplete combobox (focus stays on input, `aria-activedescendant`). Rule: ONE search entry in the header; groups Actions / Navigate / Documents; prefixes; filter chips; recents.
+
+**Account menu / header actions**: Supabase keeps the account menu top-right; Claude/Notion/Linear keep it in the sidebar. Claude's exact item list UNVERIFIED. Rule: menu width 220-280px (not the sidebar width), rows 28-32px; items: name+email, settings, help, shortcuts, release notes, backup, sign out. Header right: Search, notifications bell (review inbox), pin, copy link, overflow "…" with page actions.
+
+**Density**: Primer ActionList `inset` variant; WCAG 2.2 target size >= 24x24 (https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html). One rule set: row height 30px, radius 7px, padding 4px 8px, inset from container edges, focus by outline.
+
+**Dropdowns**: `appearance: base-select` — Chrome/Edge 135+, Safari 27 (Sep 2026), Firefox behind a flag, so not Baseline (https://web.dev/blog/web-platform-09-2026). We use our own select-only combobox (APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-select-only/) so look and behaviour are identical everywhere.
+
+## B. Invitation email (research, no code yet)
+- Supabase built-in SMTP: 2 messages/hour and only to addresses of your Supabase org team, all plans (https://supabase.com/docs/guides/auth/auth-smtp). Not usable.
+- Resend free: 100/day but `onboarding@resend.dev` only sends to your own account address; a verified domain is needed (https://resend.com/docs/knowledge-base/403-error-resend-dev-domain). Brevo (300/day) cannot authenticate gmail.com senders; Postmark rejects Gmail sign-ups; SendGrid has no permanent free plan; SES sandbox = verified recipients only.
+- Gmail SMTP with an app password: works for any recipient, mail is signed by Google (SPF/DKIM/DMARC aligned), about 500/day (third-party figure). Needs 2-Step Verification + a 16-character app password. Supabase Edge Functions block outgoing ports 25 and 587 (https://supabase.com/docs/guides/functions/limits); 465 UNVERIFIED. A Vercel Node function with nodemailer on 465 is the planned path (UNTESTED until credentials exist).
+- Google Apps Script web app (`MailApp.sendEmail`): HTTPS only, no app password; consumer cap 100 recipients/day; URL is public so a shared secret is mandatory.
+- Domain route later: ~10 USD/year + Resend free tier gives a branded sender.
+- Animation support (caniemail, data updated 2026-09-16): CSS keyframes only in Apple Mail (macOS/iOS), Samsung, Thunderbird, HEY, Fastmail; NOT Gmail, any Outlook, Proton. Animated GIF plays in Gmail/Apple/Yahoo/Outlook.com but not Outlook for Windows (shows a frame). Base64 images are blocked in Gmail, inline SVG and video unsupported, AMP needs a registered non-Gmail sender. Gmail clips HTML above ~102KB; `<style>` only in `<head>`, 16KB.
+- Technique adopted: static inline-styled 600px table layout (works everywhere) + hosted animated GIF hero (Gmail etc.) + optional head `<style>` keyframes for Apple Mail/iOS/Samsung + dark-mode overrides + bulletproof button + plain-text part + alt text. Base styles stay in the finished state so clients that strip animation still show the complete design.
+- Security: scanners (Microsoft Safe Links) open links, so the link must only load a harmless page; the token is consumed by the "Accept" click (already how our `#/join/<token>` works). Never put the token in preview text. Rate-limit invitations; escape inviter/org names; set Reply-To to the inviter.
+- Copy pattern: subject "{Inviter} invited you to join {App}", one headline, one button, plain URL under it, "expires in N days", "If you weren't expecting this, ignore it — nothing happens until you click". GitHub and Vercel use 7-day expiry (https://docs.github.com/en/organizations/managing-membership-in-your-organization/inviting-users-to-join-your-organization).
+- Owner action unavoidable: a sender credential (Gmail app password, or Apps Script deploy) must be created by the owner; it goes into the Vercel environment settings, never into chat or code.
+
+## C. Gemini Deep Research (Oct 2026)
+- "Argon" = Gemini 4 Argon, Google's flagship reasoning model, thinking levels low/medium/high (https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, updated 2026-10-14). "Argon High" as a Deep Research mode/UI label is UNVERIFIED — most likely Argon at the High thinking level; the owner should send a screenshot of the picker.
+- Plans (https://gemini.google/subscriptions/): AI Plus 4.99, AI Pro 19.99, AI Ultra from 99.99 USD/month. Limits are compute-based, refresh every 5 hours with a weekly cap (https://support.google.com/gemini/answer/17004136); exact Deep Research counts and parallel-run limits UNVERIFIED.
+- Files: "Add Files"; up to 10 files per prompt, 100MB each, ZIP up to 10 files (https://support.google.com/gemini/answer/14903178). Whether .md/.txt are accepted by Deep Research UNVERIFIED -> convert to PDF or Google Docs. Google Search on by default; Drive/Gmail optional. The plan can be edited before "Start research"; export to Docs.
+- Prompt practice (Google API doc + guides): state objective, scope, time frame, structure of the output; name preferred source types; ask for inline citations with URLs and for "unknown" instead of estimates; say which attached file is authoritative; edit the plan before starting; split big topics into 3-6 runs and synthesise. Template in docs/11.
+
+## D. Why files from the cloud session often do not open
+- Cloud sessions have a view-only file pane; edits only inside the working directory. Official docs do not describe a download action (https://code.claude.com/docs/en/desktop.md). Our session rules say the app opens only files inside the primary working directory (/home/user/gf), the scratchpad and memory directories.
+- Earlier notes were written to /home/user (outside /home/user/gf) -> the likely reason they did not open.
+- Reliable routes: files inside /home/user/gf committed and pushed (GitHub link), private Artifact pages (.html/.md, 16 MiB max), Claude Docs, teleport. Plan: put every deliverable in /home/user/gf/docs, push to GitHub, and publish a private Artifact for reading.

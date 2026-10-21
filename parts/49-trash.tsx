@@ -197,12 +197,12 @@ export function TrashView() {
       {selectable && (
         <div className="ai-bar">
           <input className="set-in" style={{ width: 220 }} aria-label="Search the Trash" placeholder="Search the Trash" value={q} onChange={(e) => setQ(e.target.value)} />
-          <select className="set-in" style={{ width: 170 }} aria-label="Deleted within" value={age} onChange={(e) => setAge(e.target.value as "any" | "7" | "30")}><option value="any">Deleted any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+          <Select label="Deleted within" width={170} value={age} onChange={(v) => setAge(v as "any" | "7" | "30")} options={[{ value: "any", label: "Deleted any time" }, { value: "7", label: "Last 7 days" }, { value: "30", label: "Last 30 days" }]} />
           <span className="sp" />
           <button type="button" className="btn" disabled={shown.length === 0} onClick={() => setPicked(pickedRows.length === shown.length ? new Set() : new Set(shown.map((r) => r.key)))}>{pickedRows.length === shown.length && shown.length > 0 ? "Clear selection" : "Select all shown"}</button>
           <button type="button" className="btn" disabled={busy || pickedRows.length === 0} onClick={() => void restore(pickedRows)}><Undo2 size={14} aria-hidden />Restore{pickedRows.length ? ` (${pickedRows.length})` : ""}</button>
           <button type="button" className="btn btn-danger" disabled={busy || pickedRows.length === 0} onClick={() => void deleteForever(pickedRows)}>Delete forever{pickedRows.length ? ` (${pickedRows.length})` : ""}</button>
-          <select className="set-in" style={{ width: 190 }} aria-label="Change the timer of the selected items" disabled={busy || pickedRows.length === 0} value="" onChange={(e) => { if (e.target.value) void setTimer(pickedRows, e.target.value); }}><option value="">Timer for selected…</option>{TIMER_CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
+          <Select label="Change the timer of the selected items" width={190} disabled={busy || pickedRows.length === 0} value="" placeholder="Timer for selected…" onChange={(v) => void setTimer(pickedRows, v)} options={TIMER_CHOICES.map((c) => ({ value: c.v, label: c.label }))} />
         </div>
       )}
       {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
@@ -214,7 +214,7 @@ export function TrashView() {
           <b>{r.title}</b><span className="chip">{r.type === "edit" ? "Edit set" : "Page"}</span>
           <span className="meta" style={{ margin: 0 }} title={r.purgeAt ? `Deleted for good on ${new Date(r.purgeAt).toLocaleString()}` : "Never deleted automatically"}>{r.sub} · deleted {ago(r.deletedAt)} · {leftText(r.purgeAt)}</span>
           <span className="sp" />
-          <select className="set-in" style={{ width: 150 }} aria-label={`Change the timer of ${r.title}`} disabled={busy} value="" onChange={(e) => { if (e.target.value) void setTimer([r], e.target.value); }}><option value="">Timer…</option>{TIMER_CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
+          <Select label={`Change the timer of ${r.title}`} width={150} disabled={busy} value="" placeholder="Timer…" onChange={(v) => void setTimer([r], v)} options={TIMER_CHOICES.map((c) => ({ value: c.v, label: c.label }))} />
           <button type="button" className="btn" disabled={busy} onClick={() => void restore([r])}>Restore</button>
           <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void deleteForever([r])}>Delete forever</button>
         </div>

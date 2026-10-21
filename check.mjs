@@ -117,12 +117,12 @@ await page.keyboard.press("Control+k"); await page.waitForTimeout(200); await pa
 // I. MoE lab logic
 await go("#/chapter/overview?p=lab%3Amoe");
 const setRange = (idx, v) => page.evaluate(([i, val]) => { const el = document.querySelectorAll('.lab input[type=range]')[i]; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(el, String(val)); el.dispatchEvent(new Event("input", { bubbles: true })); }, [idx, v]);
-await page.selectOption(".lab select", "qwen25_3b");
+await page.click(".lab [role=combobox]"); await page.click('.pop-w [role=option]:has-text("Qwen2.5-Coder-3B")');
 await setRange(0, 0); await setRange(1, 16); await setRange(2, 0);
 await page.waitForTimeout(150);
 let verdict = await page.evaluate(() => document.querySelector('.tile[data-v]')?.textContent ?? "");
 ok("I MoE CPU-only 3B on 16 GB fits (was 999% bug)", verdict.includes("Fits comfortably"), verdict);
-await page.selectOption(".lab select", "deepseek_r1_70b");
+await page.click(".lab [role=combobox]"); await page.click('.pop-w [role=option]:has-text("DeepSeek-R1-70B")');
 await setRange(1, 8); await setRange(0, 2); await setRange(2, 25);
 await page.waitForTimeout(150);
 verdict = await page.evaluate(() => document.querySelector('.tile[data-v]')?.textContent ?? "");
@@ -309,7 +309,7 @@ ok("U profile menu focuses first item", await page.evaluate(() => document.activ
 await page.keyboard.press("ArrowDown"); await page.keyboard.press("ArrowDown");
 ok("U arrow keys move through the menu", (await page.evaluate(() => document.activeElement?.textContent)).includes("Keyboard shortcuts"));
 await page.keyboard.press("End");
-ok("U End goes to the last item", (await page.evaluate(() => document.activeElement?.textContent)).includes("Import backup"));
+ok("U End goes to the last item", (await page.evaluate(() => document.activeElement?.textContent)).match(/Import backup|Sign in|Sign out/));
 await page.keyboard.press("Escape"); await page.waitForTimeout(200);
 ok("U Esc closes the menu and returns focus to the button", await page.evaluate(() => document.activeElement?.classList.contains("foot-btn")));
 await page.keyboard.press("Alt+n"); await page.waitForTimeout(200);

@@ -1,20 +1,23 @@
 // GeminiForge V20 Workbench — single-file build. Dark only. Libraries: react, zustand, lucide-react.
-import { flushSync } from "react-dom";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync, createPortal } from "react-dom";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import {
   PanelLeft, Plus, BookOpen, Layers, Cpu, Network, Box, FileText, ShieldCheck, Sparkles,
   ArrowUp, Copy, Check, X, Code2, ChevronRight, ChevronDown, Zap, RotateCcw, FolderKanban, Lock,
-  Search, List, Bookmark, Settings, Building2, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud, Inbox, KeyRound, Undo2, Pause, Play, RefreshCw, Trash2
+  Search, List, Bookmark, Settings, Building2, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud, Inbox, KeyRound, Undo2, Pause, Play, RefreshCw, Trash2,
+  Ellipsis, LayoutGrid, Rows3, Users, Mail, LogOut, CircleHelp, Bell, Link2, Archive, Pencil, UserPlus, FolderOpen, Printer, Activity, ChevronsUpDown, House
 } from "lucide-react";
 
 // #region 1. TYPES
 export type ChapterId = string;
 export type PaneKind = "crate" | "pack" | "prompt" | "confirm" | "patch" | "spike" | "os" | "lab";
 export interface PaneRef { kind: PaneKind; id: string }
-export interface WsOrg { id: string; slug: string; name: string; role: "owner" | "admin" | "member" }
-export interface WsProject { id: string; slug: string; name: string; description: string; visibility: string; org_id: string | null; role: "manager" | "editor" | "viewer" }
+export interface WsOrg { id: string; slug: string; name: string; role: "owner" | "admin" | "member"; created_at?: string; members?: number | null; project_count?: number }
+export interface WsProject { id: string; slug: string; name: string; description: string; visibility: string; org_id: string | null; role: "manager" | "editor" | "viewer"; created_at?: string; docs?: number; last_edit?: string | null }
+export interface WsArchived { id: string; name: string; org_id: string; archived_at: string }
+export interface WsDeletedOrg { id: string; name: string; slug: string; deleted_at: string }
 export type View =
   | { kind: "home" }
   | { kind: "chapter"; id: ChapterId; sec?: string }
@@ -28,6 +31,7 @@ export type View =
   | { kind: "inbox" }
   | { kind: "access" }
   | { kind: "orgs" }
+  | { kind: "org"; id: string; tab?: string }
   | { kind: "project" }
   | { kind: "join"; token: string };
 export type MotionMode = "full" | "reduced" | "system";

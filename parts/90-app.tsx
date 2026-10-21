@@ -169,8 +169,8 @@ export default function App() {
   const active = useActiveSection(scroller, sections.map((s) => s.id), chapterId ?? "");
 
   return (
-    <div className="gf" data-rev={contentRev} data-motion={reduced ? "reduced" : "full"} data-sb={sidebarOpen ? "open" : "closed"} style={{ "--sbw": sidebarOpen ? "300px" : "0px", "--panew": pane ? `${paneWidth}px` : "0px", "--ps": TEXT_PX[textSize], "--cw": WIDTH_PX[width], "--pf": font === "serif" ? "var(--serif)" : "var(--sans)" } as React.CSSProperties}>
-      <style>{CSS}</style>
+    <div className="gf" data-rev={contentRev} data-motion={reduced ? "reduced" : "full"} data-sb={sidebarOpen ? "open" : "closed"} style={{ "--sbw": sidebarOpen ? "272px" : "0px", "--panew": pane ? `${paneWidth}px` : "0px", "--ps": TEXT_PX[textSize], "--cw": WIDTH_PX[width], "--pf": font === "serif" ? "var(--serif)" : "var(--sans)" } as React.CSSProperties}>
+      <style>{CSS}{UI_CSS}</style>
       <Sidebar />
       <main className="main">
         <Header />
@@ -191,16 +191,17 @@ export default function App() {
               {view.kind === "trash" && <TrashView />}
               {view.kind === "access" && <AccessView />}
               {view.kind === "orgs" && <OrgsView />}
+              {view.kind === "org" && <OrgView id={view.id} tab={view.tab} />}
               {view.kind === "project" && <ProjectView />}
               {view.kind === "join" && <JoinView token={view.token} />}
             </ErrorBoundary>
           </div>
           {chapterId && <OutlineRail sections={sections} active={active} onGo={(id) => go({ kind: "chapter", id: chapterId, sec: id })} />}
-          {view.kind !== "home" && (
+          {view.kind !== "home" && view.kind !== "orgs" && view.kind !== "org" && view.kind !== "join" && (
             <div className="dock">
               {far && <button type="button" className="stb" aria-label="Scroll to bottom" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: reduced ? "auto" : "smooth" })}><ChevronDown size={17} aria-hidden /></button>}
               {/* the review screens have no question box: starting a thread there would navigate away in the middle of a review */}
-              {spec && view.kind !== "inbox" && view.kind !== "trash" && view.kind !== "access" && view.kind !== "orgs" && view.kind !== "project" && view.kind !== "join" && <Composer placeholder="Ask a question, or type / for commands" onSubmit={submit} />}
+              {spec && view.kind !== "inbox" && view.kind !== "trash" && view.kind !== "access" && view.kind !== "project" && <Composer placeholder="Ask a question, or type / for commands" onSubmit={submit} />}
             </div>
           )}
         </div>

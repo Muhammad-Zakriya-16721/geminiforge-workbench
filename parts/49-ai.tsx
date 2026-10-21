@@ -54,7 +54,7 @@ export async function refreshAi(): Promise<void> {
     if (!uid) { useStore.setState({ isAdmin: false, isManager: false, workspace: null, projectId: "", adminChecked: true, inboxCount: 0, trashCount: 0 }); stopLive(); return; }
     const { data: ws, error: we } = await supabase.rpc("my_workspace");
     if (we || !ws) { useStore.setState({ adminChecked: true }); return; } // a failed check must not look like "no access"
-    const w = ws as { super: boolean; orgs: WsOrg[]; projects: WsProject[] };
+    const w = ws as { super: boolean; orgs: WsOrg[]; projects: WsProject[]; archived_projects: WsArchived[]; deleted_orgs: WsDeletedOrg[] };
     const st = useStore.getState();
     let stored = ""; try { stored = window.localStorage.getItem("gf_project") ?? ""; } catch { /* no storage */ }
     const pid = [st.projectId, stored].find((x) => x && w.projects.some((p) => p.id === x)) ?? (w.projects.find((p) => p.slug === "geminiforge") ?? w.projects[0])?.id ?? "";
@@ -392,8 +392,8 @@ function TokenEditor({ t, versions, ask, onDone }: { t: TokenRow; versions: Vers
     <div style={{ flexBasis: "100%", marginTop: 6 }}>
       <div className="ai-form">
         <label>Name<input className="set-in" maxLength={80} value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} /></label>
-        <label>Can<select className="set-in" value={f.mode} onChange={(e) => setF({ ...f, mode: e.target.value })}><option value="read">Read only</option><option value="propose">Read and propose edits</option></select></label>
-        <label>Expiry<select className="set-in" value={f.expiry} onChange={(e) => setF({ ...f, expiry: e.target.value })}><option value="keep">Keep ({t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "none"})</option><option value="7">7 days from now</option><option value="30">30 days from now</option><option value="90">90 days from now</option><option value="365">1 year from now</option></select></label>
+        <label>Can<Select label="Can" value={f.mode} onChange={(v) => setF({ ...f, mode: v })} options={[{ value: "read", label: "Read only" }, { value: "propose", label: "Read and propose edits" }]} /></label>
+        <label>Expiry<Select label="Expiry" value={f.expiry} onChange={(v) => setF({ ...f, expiry: v })} options={[{ value: "keep", label: `Keep (${t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "none"})` }, { value: "7", label: "7 days from now" }, { value: "30", label: "30 days from now" }, { value: "90", label: "90 days from now" }, { value: "365", label: "1 year from now" }]} /></label>
         <label>Requests per day<input className="set-in" type="number" min={1} max={100000} value={f.daily} onChange={(e) => setF({ ...f, daily: e.target.value })} /></label>
         <label>Waiting edits at most<input className="set-in" type="number" min={1} max={200} value={f.pend} onChange={(e) => setF({ ...f, pend: e.target.value })} /></label>
         <label>Only these id prefixes<input className="set-in" value={f.prefixes} onChange={(e) => setF({ ...f, prefixes: e.target.value })} placeholder="all documents" /></label>
@@ -574,8 +574,8 @@ export function AccessView() {
       <form onSubmit={create}>
         <div className="ai-form">
           <label>Name<input className="set-in" required maxLength={80} value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} placeholder="Gemini on my phone" /></label>
-          <label>Can<select className="set-in" value={f.mode} onChange={(e) => setF({ ...f, mode: e.target.value })}><option value="read">Read only</option><option value="propose">Read and propose edits</option></select></label>
-          <label>Expires<select className="set-in" value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })}><option value="7">in 7 days</option><option value="30">in 30 days</option><option value="90">in 90 days</option><option value="365">in 1 year</option></select></label>
+          <label>Can<Select label="Can" value={f.mode} onChange={(v) => setF({ ...f, mode: v })} options={[{ value: "read", label: "Read only" }, { value: "propose", label: "Read and propose edits" }]} /></label>
+          <label>Expires<Select label="Expires" value={f.days} onChange={(v) => setF({ ...f, days: v })} options={[{ value: "7", label: "in 7 days" }, { value: "30", label: "in 30 days" }, { value: "90", label: "in 90 days" }, { value: "365", label: "in 1 year" }]} /></label>
           <label>Requests per day<input className="set-in" type="number" min={1} max={100000} value={f.limit} onChange={(e) => setF({ ...f, limit: e.target.value })} /></label>
           {f.mode === "propose" && <label>Waiting edits at most<input className="set-in" type="number" min={1} max={200} value={f.pending} onChange={(e) => setF({ ...f, pending: e.target.value })} /></label>}
           <label>Only these id prefixes (optional)<input className="set-in" value={f.prefixes} onChange={(e) => setF({ ...f, prefixes: e.target.value })} placeholder="crate:, pack:" /></label>

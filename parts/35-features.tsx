@@ -2,7 +2,7 @@
 // Edit this region when you add or change a workbench feature; the Settings pages render straight from it.
 export const TEXT_PX: Record<TextSize, string> = { s: "15.5px", m: "17px", l: "19px" };
 export const WIDTH_PX: Record<ColWidth, string> = { narrow: "680px", normal: "780px", wide: "920px" };
-export const APP_VERSION = "0.6.0";
+export const APP_VERSION = "0.7.0";
 export const BUILD_DATE = "2026-10-22";
 
 export type FeatAction = { go: View } | { pane: PaneRef } | { ask: string } | { tab: string };
@@ -123,6 +123,7 @@ export const LABS: { ref: PaneRef; name: string; desc: string }[] = [
 ];
 
 export const CHANGELOG: { v: string; date: string; items: string[] }[] = [
+  { v: "0.7.0", date: "2026-10-21", items: ["The start address opens the Organizations page: cards or list, search, filter, sort, create, rename, delete and restore.", "Organization page with Projects, People, Invitations, Activity and Settings; an Invite button that is always in reach; archived projects can be restored.", "Breadcrumbs (app > organization > Projects > project > page) with switchers; one search in the header with scopes and prefixes (> # @); notification bell for the Review inbox.", "Sidebar reorganised into collapsible groups; compact account menu; smaller hover and click areas everywhere; custom animated dropdowns replace the browser defaults.", "Invitation email (animated header, works in every mail client) sent through the server when email is set up; otherwise a link and a ready-written email."] },
   { v: "0.6.0", date: "2026-10-22", items: ["Organizations and projects with invitation-only access, roles, invitation links and a project switcher.", "Trash timer: choose how long removed items stay, or keep them until you delete them (default).", "AI tokens can only be created by project managers."] },
   { v: "0.5.0", date: "2026-10-21", items: ["AI space: Review inbox with diffs, risk flags, page panel, undo and live updates.", "AI access: tokens you can edit, message for AI tools with history, activity log, checks, backup and llms.txt export.", "Trash with restore and 30-day clean-up; Added pages with import, download and tables.", "Safer MCP: per-address limits, hidden-text and injection-phrase checks."] },
   { v: "0.4.0", date: "2026-10-17", items: ["Works on React 18 (the Gemini Canvas version).", "Answer engine rebuilt: shows how a question was read, applies every filter and keyword, refuses items that do not exist, answers status, category, between-size, binary and full-prompt questions.", "All questions page, undo for deletes, restore archived questions, delete-all.", "Save warnings, tabs stay in sync, backup reminder.", "Spike tracker and Claims review page.", "Menus work with arrow keys, focus is kept, printing includes collapsed rows, new shortcuts (Alt+N, /).", "Optional smart matching (local model) for questions the rules cannot answer."] },
