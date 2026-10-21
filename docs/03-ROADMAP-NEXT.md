@@ -30,4 +30,4 @@ Live updates (Realtime), review inbox + side panel + highlight, Trash + retentio
 1. Make `get_content_bundle` require a signed-in member (or a valid share link). 2. Sign-in screen as the first screen. 3. MCP: anonymous tools return nothing; every AI client uses a token (the Gemini path token already works). 4. `share_links` table (id, project/doc, expires_at, revoked_at, hashed secret) + read-only reader route `#/s/<secret>`. 5. Tests: anon gets nothing from every table/RPC/MCP tool; share link works until revoked. Confirm with the owner before switching, because the site stops working for signed-out visitors.
 
 ## Decisions still open
-1. Does a member see all projects of an organization or only invited ones? (recommend: only invited, with Organization Admin seeing all). 2. Keep the Canvas single-file build? 3. Which AI clients matter (Gemini app tested; Claude Code/Cursor untested)?
+1. DECIDED 2026-10-21: a member sees only the projects they are invited to; organization admins see all (design and schema in docs/09 section B). 2. Keep the Canvas single-file build? 3. Which AI clients matter (Gemini app tested; Claude Code/Cursor untested)?

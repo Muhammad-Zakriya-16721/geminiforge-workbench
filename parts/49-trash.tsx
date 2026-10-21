@@ -1,4 +1,4 @@
-// #region 5i. TRASH AND CONFIRMATIONS. Edits and added pages go to Trash for 30 days; permanent delete asks first. Needs Supabase, so the Canvas build stubs it.
+// #region 5i. TRASH AND CONFIRMATIONS. Edits and added pages go to the Trash for the time the owner sets (30 days by default); permanent delete asks first. Needs Supabase, so the Canvas build stubs it.
 interface ConfirmOpts { title: string; body: React.ReactNode; confirmLabel: string; type?: string; danger?: boolean }
 
 function ConfirmDialog({ opts, onClose }: { opts: ConfirmOpts; onClose: (ok: boolean) => void }) {
@@ -34,9 +34,12 @@ function useConfirm() {
   return { ask, node };
 }
 
-interface TrashRow { key: string; type: "edit" | "page"; id: string; title: string; sub: string; deletedAt: string; purgeAt: string }
+interface TrashRow { key: string; type: "edit" | "page"; id: string; title: string; sub: string; deletedAt: string; purgeAt: string | null }
 interface LogRow { id: number; item_type: string; item_id: string; title: string; action: string; at: string }
 const daysLeft = (iso: string) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
+// null means the item is kept until the owner deletes it by hand
+const leftText = (iso: string | null) => (iso === null ? "kept until you delete it" : `purges in ${daysLeft(iso)} day${daysLeft(iso) === 1 ? "" : "s"}`);
+const TIMER_CHOICES: { v: string; label: string }[] = [{ v: "1", label: "1 day" }, { v: "7", label: "7 days" }, { v: "30", label: "30 days" }, { v: "90", label: "90 days" }, { v: "365", label: "1 year" }, { v: "never", label: "Keep until I delete it" }];
 
 export function TrashView() {
   const { isAdmin, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
@@ -48,22 +51,26 @@ export function TrashView() {
   const [age, setAge] = useState<"any" | "7" | "30">("any");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [proj, setProj] = useState<{ id: string; days: number | null } | null>(null);
+  const [daysIn, setDaysIn] = useState("30");
+  const [never, setNever] = useState(false);
   const { ask, node } = useConfirm();
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const [es, ps, lg] = await Promise.all([
+    const [pj, es, ps, lg] = await Promise.all([
+      supabase.from("projects").select("id,trash_days").order("created_at").limit(1),
       supabase.from("change_sets").select("id,title,client,deleted_at,purge_after,doc_drafts(id)").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
       supabase.from("docs").select("id,ref,kind,title,deleted_at,purge_after").eq("source", "native").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
       supabase.from("trash_log").select("id,item_type,item_id,title,action,at").order("at", { ascending: false }).limit(200)
     ]);
-    const e = es.error ?? ps.error ?? lg.error;
+    const e = pj.error ?? es.error ?? ps.error ?? lg.error;
+    if (pj.data?.[0]) { const d = pj.data[0].trash_days as number | null; setProj({ id: pj.data[0].id as string, days: d }); setDaysIn(String(d ?? 30)); setNever(d === null); }
     if (e) { setErr(e.message); return; }
     setErr("");
-    const plus30 = (d: string) => new Date(new Date(d).getTime() + 30 * 86_400_000).toISOString();
     const out: TrashRow[] = [
-      ...(es.data ?? []).map((r) => ({ key: `edit:${r.id}`, type: "edit" as const, id: r.id as string, title: r.title as string, sub: `${(r.doc_drafts as unknown[] | null)?.length ?? 0} edit(s)${r.client ? ` · ${r.client}` : ""}`, deletedAt: r.deleted_at as string, purgeAt: (r.purge_after as string | null) ?? plus30(r.deleted_at as string) })),
-      ...(ps.data ?? []).map((r) => ({ key: `page:${r.id}`, type: "page" as const, id: r.id as string, title: r.title as string, sub: r.ref as string, deletedAt: r.deleted_at as string, purgeAt: (r.purge_after as string | null) ?? plus30(r.deleted_at as string) }))
+      ...(es.data ?? []).map((r) => ({ key: `edit:${r.id}`, type: "edit" as const, id: r.id as string, title: r.title as string, sub: `${(r.doc_drafts as unknown[] | null)?.length ?? 0} edit(s)${r.client ? ` · ${r.client}` : ""}`, deletedAt: r.deleted_at as string, purgeAt: (r.purge_after as string | null) })),
+      ...(ps.data ?? []).map((r) => ({ key: `page:${r.id}`, type: "page" as const, id: r.id as string, title: r.title as string, sub: r.ref as string, deletedAt: r.deleted_at as string, purgeAt: (r.purge_after as string | null) }))
     ].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
     setRows(out); setLog((lg.data ?? []) as LogRow[]);
     setPicked((p) => new Set([...p].filter((k) => out.some((r) => r.key === k))));
@@ -79,6 +86,30 @@ export function TrashView() {
   const shown = useMemo(() => (rows ?? []).filter((r) => (tab === "all" || tab === r.type) && (!q.trim() || `${r.title} ${r.sub}`.toLowerCase().includes(q.trim().toLowerCase())) && (age === "any" || Date.now() - new Date(r.deletedAt).getTime() <= Number(age) * 86_400_000)), [rows, tab, q, age]);
   const counts = { edit: (rows ?? []).filter((r) => r.type === "edit").length, page: (rows ?? []).filter((r) => r.type === "page").length };
   const pickedRows = shown.filter((r) => picked.has(r.key));
+
+  // how long NEW removals stay (the project setting), and how long the items already here stay
+  const saveSetting = async () => {
+    if (!supabase || !proj) return;
+    const n = Math.round(Number(daysIn));
+    if (!never && !(n >= 1 && n <= 3650)) { notify("Enter a number of days from 1 to 3650"); return; }
+    const { error } = await supabase.from("projects").update({ trash_days: never ? null : n }).eq("id", proj.id);
+    notify(error ? error.message : never ? "New items will stay in the Trash until you delete them" : `New items will stay in the Trash for ${n} day${n === 1 ? "" : "s"}`);
+    await load();
+  };
+  const setTimer = async (list: TrashRow[], choice: string) => {
+    if (!supabase || list.length === 0 || busy) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("set_trash_timer", { p_edit_ids: list.filter((r) => r.type === "edit").map((r) => r.id), p_page_ids: list.filter((r) => r.type === "page").map((r) => r.id), p_days: choice === "never" ? null : Number(choice) });
+    setBusy(false);
+    notify(error ? error.message : choice === "never" ? `${list.length} kept until you delete ${list.length === 1 ? "it" : "them"}` : `${list.length} will be deleted in ${choice} day${choice === "1" ? "" : "s"}`);
+    await load();
+  };
+  const applyToAll = async () => {
+    const all = rows ?? []; if (all.length === 0) return;
+    const d = never ? "never" : String(Math.round(Number(daysIn)));
+    if (!never && !(Number(d) >= 1)) { notify("Enter a number of days from 1 to 3650"); return; }
+    if (await ask({ title: "Change the timer of everything in the Trash?", body: <>{all.length} item(s) will {never ? "stay until you delete them" : `be deleted ${d} day(s) from now`}. This replaces their current timers.</>, confirmLabel: "Change timers", danger: !never ? true : false })) await setTimer(all, d);
+  };
 
   const restore = async (list: TrashRow[]) => {
     if (!supabase || busy || list.length === 0) return;
@@ -143,7 +174,15 @@ export function TrashView() {
       <style>{AI_CSS}{PAGES_CSS}</style>
       {node}
       <h1 className="view-h">Trash</h1>
-      <p className="meta">Deleted edits and added pages stay here for 30 days and can be restored. After that they are removed automatically. Accepted AI edits are kept as history and cannot be deleted until you undo them. Deleted tokens cannot be restored.</p>
+      <p className="meta">Deleted edits and added pages stay here for the time you choose below and can be restored. After that they are removed automatically (unless you chose to keep them until you delete them). Accepted AI edits are kept as history and cannot be deleted until you undo them. Deleted tokens cannot be restored.</p>
+      {proj && (
+        <div className="ai-bar" role="group" aria-label="Trash timer">
+          <label className="meta" style={{ margin: 0 }}>Keep new items for <input className="set-in" type="number" min={1} max={3650} style={{ width: 90 }} disabled={never} value={daysIn} onChange={(e) => setDaysIn(e.target.value)} aria-label="Days to keep items in the Trash" /> days</label>
+          <label className="meta" style={{ margin: 0 }}><input type="checkbox" className="ai-ck" checked={never} onChange={(e) => setNever(e.target.checked)} /> never delete automatically</label>
+          <button type="button" className="btn" onClick={() => void saveSetting()}>Save timer</button>
+          <button type="button" className="btn" disabled={busy || (rows ?? []).length === 0} onClick={() => void applyToAll()}>Apply to everything now in the Trash</button>
+        </div>
+      )}
       <div className="ai-bar">
         <div className="seg" role="group" aria-label="Type">
           <button type="button" aria-pressed={tab === "all"} onClick={() => setTab("all")}>All ({(rows ?? []).length})</button>
@@ -163,6 +202,7 @@ export function TrashView() {
           <button type="button" className="btn" disabled={shown.length === 0} onClick={() => setPicked(pickedRows.length === shown.length ? new Set() : new Set(shown.map((r) => r.key)))}>{pickedRows.length === shown.length && shown.length > 0 ? "Clear selection" : "Select all shown"}</button>
           <button type="button" className="btn" disabled={busy || pickedRows.length === 0} onClick={() => void restore(pickedRows)}><Undo2 size={14} aria-hidden />Restore{pickedRows.length ? ` (${pickedRows.length})` : ""}</button>
           <button type="button" className="btn btn-danger" disabled={busy || pickedRows.length === 0} onClick={() => void deleteForever(pickedRows)}>Delete forever{pickedRows.length ? ` (${pickedRows.length})` : ""}</button>
+          <select className="set-in" style={{ width: 190 }} aria-label="Change the timer of the selected items" disabled={busy || pickedRows.length === 0} value="" onChange={(e) => { if (e.target.value) void setTimer(pickedRows, e.target.value); }}><option value="">Timer for selected…</option>{TIMER_CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
         </div>
       )}
       {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
@@ -172,8 +212,9 @@ export function TrashView() {
         <div key={r.key} className="ai-tok" data-key={r.key}>
           <input type="checkbox" className="ai-ck" aria-label={`Select ${r.title}`} checked={picked.has(r.key)} onChange={() => toggle(r.key)} />
           <b>{r.title}</b><span className="chip">{r.type === "edit" ? "Edit set" : "Page"}</span>
-          <span className="meta" style={{ margin: 0 }}>{r.sub} · deleted {ago(r.deletedAt)} · purges in {daysLeft(r.purgeAt)} day{daysLeft(r.purgeAt) === 1 ? "" : "s"}</span>
+          <span className="meta" style={{ margin: 0 }} title={r.purgeAt ? `Deleted for good on ${new Date(r.purgeAt).toLocaleString()}` : "Never deleted automatically"}>{r.sub} · deleted {ago(r.deletedAt)} · {leftText(r.purgeAt)}</span>
           <span className="sp" />
+          <select className="set-in" style={{ width: 150 }} aria-label={`Change the timer of ${r.title}`} disabled={busy} value="" onChange={(e) => { if (e.target.value) void setTimer([r], e.target.value); }}><option value="">Timer…</option>{TIMER_CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
           <button type="button" className="btn" disabled={busy} onClick={() => void restore([r])}>Restore</button>
           <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void deleteForever([r])}>Delete forever</button>
         </div>
