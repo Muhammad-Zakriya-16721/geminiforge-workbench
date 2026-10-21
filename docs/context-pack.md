@@ -5,7 +5,7 @@ Date: 2026-10-21. Use this as background for every research prompt.
 A documentation workspace that one owner uses, with invited collaborators and AI tools. Structure: Organizations > Projects > Documents. The first project holds a large technical specification ("GeminiForge V20": chapters, a library of crates/packs/prompts, a rule-based question answering engine). Other projects hold ordinary Markdown pages. The planned core product: a master file with phases, steps, sub-steps with check marks, and decisions. Everything is editable by the owner.
 
 ## Stack and limits
-React 18 + TypeScript + Zustand, own dark CSS (no UI library, no Tailwind). Supabase free plan (Postgres with row-level security, Auth, Realtime, Edge Functions, pg_cron). Vercel hobby plan (static site + serverless functions, auto-deploy from GitHub). GitHub Actions CI with Playwright browser tests. No paid services unless named. English UI only; Urdu text inside documents must be possible. Solo owner; today is October 2026.
+React 18 + TypeScript + Zustand, own dark CSS (no UI library, no Tailwind). Supabase free plan (Postgres with row-level security, Auth, Realtime, Edge Functions, pg_cron). Vercel hobby plan (static site + serverless functions, auto-deploy from GitHub). GitHub Actions CI with Playwright browser tests. No paid services unless named. English only, always: UI, documents and research. Solo owner; today is October 2026.
 
 ## What exists (v0.7.0)
 - Start page = Organizations (cards or list, search, filter, sort, create, rename, soft delete, restore). Organization page: Projects, People, Invitations, Activity, Settings. Project home with documents and a question bar.

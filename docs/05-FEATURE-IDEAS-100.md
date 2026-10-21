@@ -56,8 +56,8 @@ Format: number. idea. Pick with the owner; effort/risk are decided when a featur
 46. Revision compare any two versions
 47. Restore single paragraph from history
 48. Word/character count and reading time
-49. Spell-check language switch (English/Urdu)
-50. RTL text support
+49. Spell-check (English)
+50. (dropped: English only)
 
 ## AI space
 
