@@ -15,7 +15,7 @@ React 18 + TypeScript + Zustand, own dark CSS (no UI library, no Tailwind). Supa
 - Live updates, backups (JSON, llms.txt), import/export of single pages.
 
 ## Decisions already made
-Only signed-in users may see documents (public only through deliberate share links, not built yet). Invited-only access. Keep until deleted by hand is the default for the Trash. Secrets never go into chat, code or git. Documentation content corrections come after the app is finished. Free Supabase plan: no MFA, no leaked-password protection.
+Only signed-in users may see documents (public only through deliberate share links, not built yet). Invited-only access. Keep until deleted by hand is the default for the Trash. Secrets never go into chat, code or git. Documentation content corrections come after the app is finished. Free Supabase plan: no leaked-password protection (TOTP MFA is free per docs/16, to be confirmed in the dashboard).
 
 ## Open topics (see the research prompts R1-R12)
 Editor technology; master-file data model; private publishing and share links; ask-the-docs with verified quotes; MCP security and OAuth; transactional email; free-plan limits; navigation benchmark; accessibility of custom widgets; import/export; AI-edit review at scale; offline and sync.
