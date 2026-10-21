@@ -16,7 +16,7 @@ const BASE_TEXT = "Hello old world. " + "A sentence that stays the same for many
 function mockState() {
   const d = (id, over) => ({ id, project_id: PID, change_set_id: "s1", doc_ref: "page:a", base_rev: 1, op: "find_replace", rationale: "fix typo", status: "pending", note: null, reject_reason: null, risk_score: 0, risk_flags: [], new_doc: false, result_title: null, applied_rev: null, reverted_at: null, created_at: new Date().toISOString(), decided_at: null, ...over });
   return {
-    admin: true, calls: [], paused: false,
+    admin: true, role: "manager", invites: [], calls: [], paused: false,
     tokens: [{ id: "tk-act", label: "Active token A", mode: "read", path_prefixes: ["crate:"], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() + 86400000 * 10).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date().toISOString(), ai_note: "" }, { id: "tk-old", label: "Old revoked token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() + 86400000).toISOString(), revoked_at: new Date().toISOString(), last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 5).toISOString() }, { id: "tk-old2", label: "Old expired token", mode: "read", path_prefixes: [], daily_limit: 100, max_pending: 20, expires_at: new Date(Date.now() - 86400000).toISOString(), revoked_at: null, last_used_at: null, last_client: null, created_at: new Date(Date.now() - 86400000 * 9).toISOString() }],
     trashSets: [{ id: "t1", title: "Trashed edit set", client: "Google", deleted_at: new Date(Date.now() - 86400000 * 2).toISOString(), purge_after: new Date(Date.now() + 86400000 * 28).toISOString(), doc_drafts: [{ id: "x1" }] }],
     trashPages: [{ id: "tp1", ref: "page:old", kind: "page", title: "Trashed page", deleted_at: new Date(Date.now() - 86400000).toISOString(), purge_after: new Date(Date.now() + 86400000 * 29).toISOString() }],
@@ -42,7 +42,18 @@ async function setup(st) {
   };
   await page.route("**/rest/v1/rpc/get_content_bundle", (r) => r.abort());
   await page.route("**/rest/v1/workbench_state*", (r) => send(r, []));
-  await page.route("**/rest/v1/app_admins*", (r) => send(r, st.admin ? [{ user_id: UID }] : []));
+  const OID = "00000000-0000-4000-8000-0000000000a1", P2 = "00000000-0000-4000-8000-0000000000b2";
+  await page.route("**/rest/v1/rpc/my_workspace", (r) => send(r, st.admin ? { super: true, orgs: [{ id: OID, slug: "personal", name: "Personal", role: "owner" }], projects: [{ id: PID, slug: "geminiforge", name: "GeminiForge", description: "The spec", visibility: "public", org_id: OID, role: st.role }, { id: P2, slug: "notes-project", name: "Notes project", description: "Other docs", visibility: "private", org_id: OID, role: "viewer" }] } : { super: false, orgs: [], projects: [] }));
+  await page.route("**/rest/v1/rpc/org_overview", (r) => send(r, { members: [{ user_id: UID, email: "owner@example.test", role: "owner", since: new Date().toISOString(), projects: [] }, { user_id: "u2", email: "bob@example.test", role: "member", since: new Date().toISOString(), projects: [{ project_id: P2, name: "Notes project", role: "viewer" }] }], invites: st.invites, projects: [{ id: PID, slug: "geminiforge", name: "GeminiForge", visibility: "public" }, { id: P2, slug: "notes-project", name: "Notes project", visibility: "private" }], events: [{ action: "invite_created", at: new Date().toISOString(), detail: { email: "bob@example.test" }, actor: "owner@example.test" }] }));
+  await page.route("**/rest/v1/rpc/create_invite", (r) => { const b = r.request().postDataJSON(); st.calls.push(["invite", b]); st.invites.push({ id: "iv1", email: b.p_email, org_role: b.p_org_role, project_id: b.p_project, project: b.p_project ? "Notes project" : null, project_role: b.p_project_role, expires_at: new Date(Date.now() + 86400000 * 7).toISOString(), created_at: new Date().toISOString() }); return send(r, "iv_" + "ab".repeat(32)); });
+  await page.route("**/rest/v1/rpc/revoke_invite", (r) => { st.calls.push(["revoke-invite", r.request().postDataJSON()]); st.invites = []; return r.fulfill({ status: 204, body: "" }); });
+  await page.route("**/rest/v1/rpc/remove_org_member", (r) => { st.calls.push(["remove-member", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); });
+  await page.route("**/rest/v1/rpc/set_org_role", (r) => { st.calls.push(["org-role", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); });
+  await page.route("**/rest/v1/rpc/create_project", (r) => { st.calls.push(["create-project", r.request().postDataJSON()]); return send(r, "00000000-0000-4000-8000-0000000000c3"); });
+  await page.route("**/rest/v1/rpc/project_overview", (r) => send(r, { members: [{ user_id: UID, email: "owner@example.test", org_role: "owner", role: "manager", implicit: true }, { user_id: "u2", email: "bob@example.test", org_role: "member", role: "viewer", implicit: false }], candidates: [{ user_id: "u3", email: "carol@example.test" }], invites: [] }));
+  await page.route("**/rest/v1/rpc/set_project_member", (r) => { st.calls.push(["project-member", r.request().postDataJSON()]); return r.fulfill({ status: 204, body: "" }); });
+  await page.route("**/rest/v1/rpc/invite_preview", (r) => send(r, { valid: true, org: "Personal", project: "Notes project", org_role: "member", project_role: "editor", email_hint: "bo***@example.test", email_matches: st.emailMatches !== false, expires_at: new Date(Date.now() + 86400000 * 3).toISOString() }));
+  await page.route("**/rest/v1/rpc/accept_invite", (r) => { st.calls.push(["accept-invite", r.request().postDataJSON()]); return send(r, { org_id: OID, project_id: P2 }); });
   await page.route("**/rest/v1/doc_drafts*", (r) => {
     const u = r.request().url();
     if (/select=payload/.test(u)) return send(r, [{ payload: { find: "A sentence that stays the same", replace: "X" } }]);
@@ -357,10 +368,65 @@ ok("access: llms.txt lists the documents", /^# /.test(llms) && /##\s/.test(llms)
 ok("no page errors editing tokens", p.errs.length === 0, p.errs.join("|"));
 await p.context().close();
 
+// 8. organizations and projects (invited-only)
+st = mockState(); p = await setup(st);
+await p.goto(`${base}?gftest#/home`, { waitUntil: "networkidle" }); await p.waitForTimeout(800);
+ok("switcher shows the project, its organization and the role", /GeminiForge/.test(await text(p, ".psw-b")) && /Personal/.test(await text(p, ".psw-b")) && /Manager/.test(await text(p, ".psw-b")));
+await p.click(".psw-b"); await p.waitForSelector(".psw-m");
+ok("switcher lists every project the user may open", (await p.locator(".psw-i[role=option]").count()) === 2 && /Notes project/.test(await text(p, ".psw-m")));
+await p.click('.psw-i:has-text("Notes project")'); await p.waitForTimeout(700);
+ok("another project shows its own home, not the specification", /Notes project/.test(await text(p, ".col")) && /Viewer/.test(await text(p, ".col")) && !/Chapters/.test(await text(p, ".side")) && (await p.locator(".side .nav:has-text('Library')").count()) === 0);
+ok("a viewer sees pages but not the inbox, trash or AI access", (await p.locator(".side .nav:has-text('Added pages')").count()) === 1 && (await p.locator(".side .nav:has-text('Review inbox')").count()) === 0 && (await p.locator(".side .nav:has-text('Trash')").count()) === 0 && (await p.locator(".side .nav:has-text('AI access')").count()) === 0);
+await p.click(".side .nav:has-text('Added pages')"); await p.waitForTimeout(600);
+ok("a viewer cannot create or import pages", (await p.locator('input[aria-label="New page title"]').count()) === 0);
+await p.click(".side .nav:has-text('Organizations')"); await p.waitForSelector("h1.view-h:has-text('Organizations')"); await p.waitForTimeout(500);
+ok("organization page lists projects, members and the invitation form", /GeminiForge/.test(await text(p, ".col")) && /bob@example.test/.test(await text(p, ".col")) && (await p.locator('input[type=email]').count()) === 1);
+await p.fill('input[type=email]', "dana@example.test"); await p.selectOption('label:has-text("Project (optional)") select', { index: 1 }); await p.click('button:has-text("Create invitation link")'); await p.waitForSelector(".org-link");
+const linkText = await text(p, ".org-link");
+ok("creating an invitation shows the link once and sends project role and days", /#\/join\/iv_[0-9a-f]{64}$/.test(linkText) && st.calls.some((c) => c[0] === "invite" && c[1].p_email === "dana@example.test" && c[1].p_project === PID && c[1].p_project_role === "viewer" && c[1].p_days === 7), linkText + " " + JSON.stringify(st.calls.filter((c) => c[0] === "invite")));
+await p.click('button:has-text("I sent it")'); await p.waitForTimeout(300);
+ok("the open invitation is listed and can be revoked", /dana@example.test/.test(await text(p, ".col")));
+await p.locator('.ai-tok:has-text("dana@example.test") button:has-text("Revoke")').click(); await p.waitForTimeout(400);
+ok("revoking an invitation calls the function", st.calls.some((c) => c[0] === "revoke-invite" && c[1].p_id === "iv1"));
+await p.locator('.ai-tok:has-text("bob@example.test") button:has-text("Remove")').click(); await p.waitForSelector("dialog[open]");
+ok("removing a member asks first", /lose access/.test(await text(p, "dialog[open]")) && !st.calls.some((c) => c[0] === "remove-member"));
+await p.click('dialog[open] button:has-text("Remove")'); await p.waitForTimeout(400);
+ok("confirmed removal calls remove_org_member", st.calls.some((c) => c[0] === "remove-member" && c[1].p_user === "u2"));
+await p.selectOption('select[aria-label="Organization role of bob@example.test"]', "admin"); await p.waitForTimeout(300);
+ok("an owner can change an organization role", st.calls.some((c) => c[0] === "org-role" && c[1].p_user === "u2" && c[1].p_role === "admin"));
+await p.fill('input[placeholder], .ai-form label:has-text("Project name") input', "Course notes").catch(() => {});
+await p.addScriptTag({ content: axeSrc });
+const axo = await p.evaluate(async () => (await window.axe.run(".col", { runOnly: ["wcag2a", "wcag2aa", "wcag21aa"] })).violations.map((v) => `${v.id}:${v.nodes.length}`));
+ok("organizations page: no axe violations", axo.length === 0, axo.join(","));
+await p.click(".psw-b"); await p.click('.psw-i:has-text("GeminiForge")'); await p.waitForTimeout(500); await p.click(".side .nav:has-text('Project settings')"); await p.waitForTimeout(700);
+ok("project page (manager) shows settings and people with access", /Settings/.test(await text(p, ".col")) && /owner@example.test/.test(await text(p, ".col")) && /bob@example.test/.test(await text(p, ".col")));
+await p.selectOption('select[aria-label="Project role of bob@example.test"]', "editor"); await p.waitForTimeout(300);
+ok("a manager can change a project role (manager is stored as owner)", st.calls.some((c) => c[0] === "project-member" && c[1].p_user === "u2" && c[1].p_role === "editor"));
+await p.selectOption('select[aria-label="Organization member to add"]', "u3"); await p.click('button:has-text("Give access")'); await p.waitForTimeout(300);
+ok("a manager can add an organization member to the project", st.calls.some((c) => c[0] === "project-member" && c[1].p_user === "u3" && c[1].p_role === "viewer"));
+ok("no page errors in organizations", p.errs.length === 0, p.errs.join("|"));
+await p.context().close();
+
+// 8b. an editor does not manage AI access; an invitation link can be accepted
+st = mockState(); st.role = "editor"; p = await setup(st);
+await p.goto(`${base}?gftest#/home`, { waitUntil: "networkidle" }); await p.waitForTimeout(800);
+ok("an editor sees the inbox and trash but not AI access", (await p.locator(".side .nav:has-text('Review inbox')").count()) === 1 && (await p.locator(".side .nav:has-text('AI access')").count()) === 0);
+await p.goto(`${base}?gftest#/access`, { waitUntil: "networkidle" }); await p.waitForTimeout(600);
+ok("opening AI access as an editor explains who can", /manager of this project/.test(await text(p, ".col")));
+await p.goto(`${base}?gftest#/join/iv_${"ab".repeat(32)}`, { waitUntil: "networkidle" }); await p.waitForTimeout(800);
+ok("invitation page shows organization, project, role and masked email", /Personal/.test(await text(p, ".col")) && /Notes project/.test(await text(p, ".col")) && /Editor/.test(await text(p, ".col")) && /bo\*\*\*@example.test/.test(await text(p, ".col")));
+await p.click('button:has-text("Accept invitation")'); await p.waitForTimeout(700);
+ok("accepting calls accept_invite with the token and opens the project", st.calls.some((c) => c[0] === "accept-invite" && c[1].p_token === "iv_" + "ab".repeat(32)) && !/#\/join/.test(p.url()));
+await p.context().close();
+st = mockState(); st.emailMatches = false; p = await setup(st);
+await p.goto(`${base}?gftest#/join/iv_${"cd".repeat(32)}`, { waitUntil: "networkidle" }); await p.waitForTimeout(800);
+ok("a different signed-in email cannot accept", /different email/.test(await text(p, ".col")) && await p.locator('button:has-text("Accept invitation")').isDisabled());
+await p.context().close();
+
 // 7. not an admin
 st = mockState(); st.admin = false; p = await setup(st);
 await p.goto(`${base}?gftest#/inbox`, { waitUntil: "networkidle" }); await p.waitForTimeout(600);
-ok("non-admin: no AI entries and a clear message", !/Review inbox/.test(await text(p, ".side")) && /not an administrator/.test(await text(p, ".col")));
+ok("non-admin: no AI entries and a clear message", !/Review inbox/.test(await text(p, ".side")) && /editor or manager role/.test(await text(p, ".col")));
 await p.context().close();
 await browser.close();
 console.log(`\n${n - bad}/${n} passed`); process.exit(bad ? 1 : 0);

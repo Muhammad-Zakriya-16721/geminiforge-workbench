@@ -42,7 +42,7 @@ const leftText = (iso: string | null) => (iso === null ? "kept until you delete 
 const TIMER_CHOICES: { v: string; label: string }[] = [{ v: "1", label: "1 day" }, { v: "7", label: "7 days" }, { v: "30", label: "30 days" }, { v: "90", label: "90 days" }, { v: "365", label: "1 year" }, { v: "never", label: "Keep until I delete it" }];
 
 export function TrashView() {
-  const { isAdmin, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const { isAdmin, projectId, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ projectId: s.projectId, isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [rows, setRows] = useState<TrashRow[] | null>(null);
   const [log, setLog] = useState<LogRow[]>([]);
   const [err, setErr] = useState("");
@@ -59,10 +59,10 @@ export function TrashView() {
   const load = useCallback(async () => {
     if (!supabase) return;
     const [pj, es, ps, lg] = await Promise.all([
-      supabase.from("projects").select("id,trash_days").order("created_at").limit(1),
-      supabase.from("change_sets").select("id,title,client,deleted_at,purge_after,doc_drafts(id)").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
-      supabase.from("docs").select("id,ref,kind,title,deleted_at,purge_after").eq("source", "native").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
-      supabase.from("trash_log").select("id,item_type,item_id,title,action,at").order("at", { ascending: false }).limit(200)
+      supabase.from("projects").select("id,trash_days").eq("id", projectId).limit(1),
+      supabase.from("change_sets").select("id,title,client,deleted_at,purge_after,doc_drafts(id)").eq("project_id", projectId).not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
+      supabase.from("docs").select("id,ref,kind,title,deleted_at,purge_after").eq("project_id", projectId).eq("source", "native").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
+      supabase.from("trash_log").select("id,item_type,item_id,title,action,at").eq("project_id", projectId).order("at", { ascending: false }).limit(200)
     ]);
     const e = pj.error ?? es.error ?? ps.error ?? lg.error;
     if (pj.data?.[0]) { const d = pj.data[0].trash_days as number | null; setProj({ id: pj.data[0].id as string, days: d }); setDaysIn(String(d ?? 30)); setNever(d === null); }
@@ -74,7 +74,7 @@ export function TrashView() {
     ].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
     setRows(out); setLog((lg.data ?? []) as LogRow[]);
     setPicked((p) => new Set([...p].filter((k) => out.some((r) => r.key === k))));
-  }, []);
+  }, [projectId]);
 
   // items past their purge date are removed by the server (also by a daily job)
   useEffect(() => {

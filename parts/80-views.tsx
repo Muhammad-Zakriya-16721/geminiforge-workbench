@@ -4,7 +4,7 @@ const nowGreeting = () => {
   return h >= 5 && h < 12 ? "Good morning" : h >= 12 && h < 18 ? "Good afternoon" : h >= 18 && h < 22 ? "Good evening" : "Hello, night owl";
 };
 
-const viewKey = (v: View) => (v.kind === "chapter" ? `chapter:${v.id}` : v.kind === "thread" ? `thread:${v.id}` : v.kind === "pages" ? `pages:${v.ref ?? ""}` : v.kind);
+const viewKey = (v: View) => (v.kind === "chapter" ? `chapter:${v.id}` : v.kind === "thread" ? `thread:${v.id}` : v.kind === "pages" ? `pages:${v.ref ?? ""}` : v.kind === "join" ? "join" : v.kind);
 
 function pinInfo(key: string, threads: Thread[]): { title: string; run: () => void } | null {
   const st = useStore.getState();
@@ -99,7 +99,8 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
 }
 
 export function Sidebar() {
-  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name, isAdmin, inboxCount, trashCount } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, inboxCount: s.inboxCount, trashCount: s.trashCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
+  const spec = useSpecVisible();
+  const { view, go, pins, threads, sidebarOpen, set, setPalette, menu, setMenu, tracker, name, isAdmin, isManager, projectId, hasOrgs, inboxCount, trashCount } = useStore(useShallow((s) => ({ isManager: s.isManager, projectId: s.projectId, hasOrgs: (s.workspace?.orgs.length ?? 0) > 0, isAdmin: s.isAdmin, inboxCount: s.inboxCount, trashCount: s.trashCount, view: s.view, go: s.go, pins: s.pins, threads: s.threads, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, menu: s.menu, setMenu: s.setMenu, tracker: s.tracker, name: s.name })));
   const recents = threads.filter((t) => !t.archived).sort((a, b) => b.at - a.at).slice(0, 25);
   const pinned = pins.map((k) => ({ k, info: pinInfo(k, threads) })).filter((x) => x.info);
   const done = DEEP_PROMPTS.filter((p) => tracker[p.id]?.status === "done").length;
@@ -111,18 +112,22 @@ export function Sidebar() {
           <span className="brand"><i aria-hidden>✦</i>GeminiForge <span className="mono dim" style={{ fontSize: 12 }}>V20</span></span>
           <button type="button" className="icon-btn" aria-label="Collapse sidebar" title="Collapse sidebar (Ctrl B)" onClick={() => set({ sidebarOpen: false })}><PanelLeft size={17} aria-hidden /></button>
         </div>
+        <ProjectSwitcher />
         <button type="button" className="side-search" onClick={() => setPalette(true)}><Search size={15} aria-hidden /><span>Search</span><kbd>Ctrl K</kbd></button>
         <div className="side-scroll">
-          <button type="button" className="nav" aria-current={view.kind === "home" ? "page" : undefined} onClick={() => go({ kind: "home" })}><Plus size={16} aria-hidden /><span className="nav-t">New question</span></button>
-          <button type="button" className="nav" aria-current={view.kind === "library" ? "page" : undefined} onClick={() => go({ kind: "library" })}><FolderKanban size={16} aria-hidden /><span className="nav-t">Library</span></button>
-          <button type="button" className="nav" aria-current={view.kind === "tracker" ? "page" : undefined} onClick={() => go({ kind: "tracker" })}><List size={16} aria-hidden /><span className="nav-t">Tracker</span><span className="mono dim small">{done}/{DEEP_PROMPTS.length}</span></button>
-          <button type="button" className="nav" aria-current={view.kind === "audit" ? "page" : undefined} onClick={() => go({ kind: "audit" })}><ListChecks size={16} aria-hidden /><span className="nav-t">Claims review</span></button>
-          {isAdmin && <div className="side-sec">AI space</div>}
-          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "pages" ? "page" : undefined} onClick={() => go({ kind: "pages" })}><FileText size={16} aria-hidden /><span className="nav-t">Added pages</span></button>}
+          <button type="button" className="nav" aria-current={view.kind === "home" ? "page" : undefined} onClick={() => go({ kind: "home" })}><Plus size={16} aria-hidden /><span className="nav-t">{spec ? "New question" : "Project home"}</span></button>
+          {spec && <button type="button" className="nav" aria-current={view.kind === "library" ? "page" : undefined} onClick={() => go({ kind: "library" })}><FolderKanban size={16} aria-hidden /><span className="nav-t">Library</span></button>}
+          {spec && <button type="button" className="nav" aria-current={view.kind === "tracker" ? "page" : undefined} onClick={() => go({ kind: "tracker" })}><List size={16} aria-hidden /><span className="nav-t">Tracker</span><span className="mono dim small">{done}/{DEEP_PROMPTS.length}</span></button>}
+          {spec && <button type="button" className="nav" aria-current={view.kind === "audit" ? "page" : undefined} onClick={() => go({ kind: "audit" })}><ListChecks size={16} aria-hidden /><span className="nav-t">Claims review</span></button>}
+          {projectId && <div className="side-sec">{spec ? "AI space" : "Project"}</div>}
+          {projectId && <button type="button" className="nav" aria-current={view.kind === "pages" ? "page" : undefined} onClick={() => go({ kind: "pages" })}><FileText size={16} aria-hidden /><span className="nav-t">Added pages</span></button>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "inbox" ? "page" : undefined} onClick={() => go({ kind: "inbox" })}><Inbox size={16} aria-hidden /><span className="nav-t">Review inbox</span>{inboxCount > 0 && <span className="mono small acc" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}</button>}
           {isAdmin && <button type="button" className="nav" aria-current={view.kind === "trash" ? "page" : undefined} onClick={() => go({ kind: "trash" })}><Trash2 size={16} aria-hidden /><span className="nav-t">Trash</span>{trashCount > 0 && <span className="mono small dim" aria-label={`${trashCount} in the Trash`}>{trashCount}</span>}</button>}
-          {isAdmin && <button type="button" className="nav" aria-current={view.kind === "access" ? "page" : undefined} onClick={() => go({ kind: "access" })}><KeyRound size={16} aria-hidden /><span className="nav-t">AI access</span></button>}
+          {isManager && <button type="button" className="nav" aria-current={view.kind === "access" ? "page" : undefined} onClick={() => go({ kind: "access" })}><KeyRound size={16} aria-hidden /><span className="nav-t">AI access</span></button>}
+          {hasOrgs && <button type="button" className="nav" aria-current={view.kind === "orgs" ? "page" : undefined} onClick={() => go({ kind: "orgs" })}><Building2 size={16} aria-hidden /><span className="nav-t">Organizations</span></button>}
+          {projectId && <button type="button" className="nav" aria-current={view.kind === "project" ? "page" : undefined} onClick={() => go({ kind: "project" })}><Settings size={16} aria-hidden /><span className="nav-t">Project settings</span></button>}
 
+          {spec && (<>
           {pinned.length > 0 && <div className="side-sec">Pinned</div>}
           {pinned.map(({ k, info }) => (
             <button key={k} type="button" className="nav" aria-current={cur === k ? "page" : undefined} onClick={() => info!.run()}><Bookmark size={14} aria-hidden /><span className="nav-t">{info!.title}</span></button>
@@ -139,6 +144,7 @@ export function Sidebar() {
           {recents.length === 0 && <p className="side-empty">Questions you ask are saved here.</p>}
           {recents.map((t) => <ThreadNav key={t.id} thread={t} active={cur === `thread:${t.id}`} />)}
           {threads.length > 0 && <button type="button" className="nav" aria-current={view.kind === "history" ? "page" : undefined} onClick={() => go({ kind: "history" })}><span className="nav-t dim">All questions ({threads.length})</span></button>}
+          </>)}
         </div>
         <div className="side-foot">
           {menu && <ProfileMenu onClose={() => setMenu(false)} />}
@@ -157,7 +163,7 @@ export function Header() {
   const { view, sidebarOpen, set, setPalette, pins, togglePin, threads } = useStore(useShallow((s) => ({ view: s.view, sidebarOpen: s.sidebarOpen, set: s.set, setPalette: s.setPalette, pins: s.pins, togglePin: s.togglePin, threads: s.threads })));
   const chapter = view.kind === "chapter" ? CHAPTERS.find((c) => c.id === view.id) : undefined;
   const thread = view.kind === "thread" ? threads.find((t) => t.id === view.id) : undefined;
-  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "pages" ? "Added pages" : view.kind === "trash" ? "Trash" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : "New question";
+  const title = chapter ? `${chapter.num} · ${chapter.title}` : thread ? thread.title : view.kind === "library" ? "Library" : view.kind === "tracker" ? "Tracker" : view.kind === "history" ? "All questions" : view.kind === "audit" ? "Claims review" : view.kind === "pages" ? "Added pages" : view.kind === "trash" ? "Trash" : view.kind === "inbox" ? "Review inbox" : view.kind === "access" ? "AI access" : view.kind === "orgs" ? "Organizations" : view.kind === "project" ? "Project" : view.kind === "join" ? "Invitation" : "New question";
   const key = viewKey(view);
   const pinnable = !!chapter || !!thread;
   return (
@@ -415,7 +421,7 @@ export function TrackerView() {
 }
 
 export function Palette() {
-  const { open, setPalette, go, openPane, set, motion: mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin } = useStore(useShallow((s) => ({ contentRev: s.contentRev, isAdmin: s.isAdmin, open: s.palette, setPalette: s.setPalette, go: s.go, openPane: s.openPane, set: s.set, motion: s.motion, resetAll: s.resetAll, sidebarOpen: s.sidebarOpen, pane: s.pane, threads: s.threads, notes: s.notes })));
+  const { open, setPalette, go, openPane, set, motion: mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin, isManager, projectId } = useStore(useShallow((s) => ({ isManager: s.isManager, projectId: s.projectId, contentRev: s.contentRev, isAdmin: s.isAdmin, open: s.palette, setPalette: s.setPalette, go: s.go, openPane: s.openPane, set: s.set, motion: s.motion, resetAll: s.resetAll, sidebarOpen: s.sidebarOpen, pane: s.pane, threads: s.threads, notes: s.notes })));
   const dlg = useRef<HTMLDialogElement | null>(null);
   const list = useRef<HTMLDivElement | null>(null);
   const [q, setQ] = useState("");
@@ -438,7 +444,11 @@ export function Palette() {
       ...(isAdmin ? [
         { id: "a-inbox", title: "Open the AI review inbox", sub: "Edits proposed by AI tools, waiting for your decision", group: "Action", run: () => go({ kind: "inbox" }) },
         { id: "a-trash", title: "Open the Trash", sub: "Deleted edits and pages, restore or delete for good", group: "Action", run: () => go({ kind: "trash" }) },
-        { id: "a-access", title: "Open AI access", sub: "Tokens, activity and the pause switch", group: "Action", run: () => go({ kind: "access" }) }
+      ] : []),
+      ...(isManager ? [{ id: "a-access", title: "Open AI access", sub: "Tokens, activity and the pause switch", group: "Action", run: () => go({ kind: "access" }) }] : []),
+      ...(projectId ? [
+        { id: "a-orgs", title: "Open organizations and members", sub: "Projects, people and invitations", group: "Action", run: () => go({ kind: "orgs" }) },
+        { id: "a-proj", title: "Open project settings", sub: "Name, visibility, who has access", group: "Action", run: () => go({ kind: "project" }) }
       ] : []),
       { id: "a-sb", title: sidebarOpen ? "Collapse sidebar" : "Expand sidebar", sub: "Ctrl B", group: "Action", run: () => set({ sidebarOpen: !sidebarOpen }) },
       ...(pane ? [{ id: "a-pane", title: "Close side panel", sub: "", group: "Action", run: () => openPane(null) }] : []),
@@ -458,7 +468,7 @@ export function Palette() {
       ...notes.filter((n) => parts.every((w) => n.text.toLowerCase().includes(w))).slice(0, 5).map((n) => ({ id: `note:${n.id}`, title: clip(n.text.replace(/\s+/g, " "), 70), sub: `Note on ${sourceInfo(n.ref)?.title ?? n.ref}`, group: "Note", run: () => sourceInfo(n.ref)?.run() }))
     ] : [];
     return [...(parts.length ? found.slice(0, 40) : found.filter((f) => f.id.startsWith("chapter:") || f.id.startsWith("lab:")).slice(0, 12)), ...mine, ...acts].slice(0, 60);
-  }, [q, go, openPane, set, mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin]);
+  }, [q, go, openPane, set, mm, resetAll, sidebarOpen, pane, threads, notes, contentRev, isAdmin, isManager, projectId]);
 
   useEffect(() => { setSel(0); }, [q]);
   useEffect(() => { list.current?.querySelector(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);

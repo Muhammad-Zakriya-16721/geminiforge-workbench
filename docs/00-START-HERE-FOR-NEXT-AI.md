@@ -40,12 +40,14 @@ Source of truth is `parts/*.tsx` (sorted by file name = order in the final file)
 ## 4. Gotchas that cost hours (all verified)
 - The app has its own `const CSS` string: the browser `CSS` object must be read as `globalThis.CSS`.
 - Supabase: an UPDATE also needs the SELECT policy; soft-delete with RLS fails -> use security-definer RPCs. All `mcp_*` functions are service_role only; `search_path=''` everywhere.
-- Supabase MCP SQL tool: `DROP` statements hang it (use `create or replace`, new names, `alter policy`); `delete from` inside a function body is fine; patch an existing function by a DO block that `replace()`s inside `pg_get_functiondef(...)` text and `execute`s it (see migration 0012). Test with a DO block that ends in `raise exception 'RESULT ...'` (rolls back). Long runs: background.
+- Supabase MCP SQL tool: `DROP`, unqualified `UPDATE`, `TRUNCATE` and plain `delete from x;` statements hang it (wrap deletes in `with x as (delete ... returning 1) select ...`, always give UPDATE a WHERE); `DROP` statements hang it (use `create or replace`, new names, `alter policy`); `delete from` inside a function body is fine; patch an existing function by a DO block that `replace()`s inside `pg_get_functiondef(...)` text and `execute`s it (see migration 0012). Test with a DO block that ends in `raise exception 'RESULT ...'` (rolls back). Long runs: background.
 - A function call and a subselect in one statement see the same snapshot.
 - Playwright tests mock Supabase with `route.fulfill`; count queries need `access-control-expose-headers: content-range`; fake session key `sb-<ref>-auth-token`.
 - React 18 must stay (Canvas runtime). Do not add `key={contentRev}` to the root (scroll-jump bug).
 - Never put keys in chat, code, or git. Edge Function secrets go through the Supabase dashboard.
 - ZWNJ/ZWJ must stay allowed in text (Urdu/Persian/emoji).
+
+- PL/pgSQL: `if not (a or b)` does not fire when the condition is NULL; wrap nullable checks in coalesce(). Run tests/rls-matrix.sql after any change to access functions.
 
 ## 5. Where everything is documented
 See docs/README.md (index + tree). Order to read: 00 (this), 01 vision, 02 architecture, 03 roadmap, 04 security, 05 ideas, 06 API plan, 07 known limits. Older material: `geminiforge_project_notes.md` (round-by-round log, the most detailed history), `ROADMAP.md` (superseded by 03 but still has the research answers), `SETUP.md`.

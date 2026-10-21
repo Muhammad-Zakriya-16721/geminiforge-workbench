@@ -34,6 +34,7 @@ export default function App() {
   const { view, pane, sidebarOpen, paneWidth, toast, toastUndo, go, textSize, width, font, contentRev } = useStore(useShallow((s) => ({ contentRev: s.contentRev, view: s.view, pane: s.pane, sidebarOpen: s.sidebarOpen, paneWidth: s.paneWidth, toast: s.toast, toastUndo: s.toastUndo, go: s.go, textSize: s.textSize, width: s.width, font: s.font })));
   const reduced = useReduced();
   useTitleBadge();
+  const spec = useSpecVisible();
   const scroller = useRef<HTMLDivElement | null>(null);
   const [far, setFar] = useState(false);
   const [shown, setShown] = useState<PaneRef | null>(pane);
@@ -176,18 +177,22 @@ export default function App() {
         <div className="mainbody">
           <div className="thread" ref={scroller} onScroll={onScroll}>
             <ErrorBoundary key={vkey} label="This view failed to render">
-              {view.kind === "home" && <HomeView onSubmit={submit} />}
-              {view.kind === "chapter" && !CHAPTERS.some((c) => c.id === view.id) && <div className="col enter"><h1 className="view-h">That chapter does not exist</h1><p className="meta">It may have been renamed or removed from the documentation.</p><button type="button" className="btn" onClick={() => go({ kind: "home" })}>Back to start</button></div>}
-              {view.kind === "chapter" && CHAPTERS.some((c) => c.id === view.id) && <div className="col enter" key={view.id}><Doc chapter={view.id} /><NotesBox refKey={`chapter:${view.id}`} title={CHAPTERS.find((c) => c.id === view.id)?.title ?? ""} /></div>}
-              {view.kind === "thread" && <ThreadView id={view.id} scroller={scroller} />}
-              {view.kind === "library" && <LibraryView />}
-              {view.kind === "tracker" && <TrackerView />}
-              {view.kind === "history" && <HistoryView />}
-              {view.kind === "audit" && <AuditView />}
+              {!spec && ["home", "chapter", "thread", "library", "tracker", "history", "audit"].includes(view.kind) && <ProjectHome />}
+              {spec && view.kind === "home" && <HomeView onSubmit={submit} />}
+              {spec && view.kind === "chapter" && !CHAPTERS.some((c) => c.id === view.id) && <div className="col enter"><h1 className="view-h">That chapter does not exist</h1><p className="meta">It may have been renamed or removed from the documentation.</p><button type="button" className="btn" onClick={() => go({ kind: "home" })}>Back to start</button></div>}
+              {spec && view.kind === "chapter" && CHAPTERS.some((c) => c.id === view.id) && <div className="col enter" key={view.id}><Doc chapter={view.id} /><NotesBox refKey={`chapter:${view.id}`} title={CHAPTERS.find((c) => c.id === view.id)?.title ?? ""} /></div>}
+              {spec && view.kind === "thread" && <ThreadView id={view.id} scroller={scroller} />}
+              {spec && view.kind === "library" && <LibraryView />}
+              {spec && view.kind === "tracker" && <TrackerView />}
+              {spec && view.kind === "history" && <HistoryView />}
+              {spec && view.kind === "audit" && <AuditView />}
               {view.kind === "pages" && <PagesView refId={view.ref} />}
               {view.kind === "inbox" && <InboxView />}
               {view.kind === "trash" && <TrashView />}
               {view.kind === "access" && <AccessView />}
+              {view.kind === "orgs" && <OrgsView />}
+              {view.kind === "project" && <ProjectView />}
+              {view.kind === "join" && <JoinView token={view.token} />}
             </ErrorBoundary>
           </div>
           {chapterId && <OutlineRail sections={sections} active={active} onGo={(id) => go({ kind: "chapter", id: chapterId, sec: id })} />}
@@ -195,7 +200,7 @@ export default function App() {
             <div className="dock">
               {far && <button type="button" className="stb" aria-label="Scroll to bottom" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: reduced ? "auto" : "smooth" })}><ChevronDown size={17} aria-hidden /></button>}
               {/* the review screens have no question box: starting a thread there would navigate away in the middle of a review */}
-              {view.kind !== "inbox" && view.kind !== "trash" && view.kind !== "access" && <Composer placeholder="Ask a question, or type / for commands" onSubmit={submit} />}
+              {spec && view.kind !== "inbox" && view.kind !== "trash" && view.kind !== "access" && view.kind !== "orgs" && view.kind !== "project" && view.kind !== "join" && <Composer placeholder="Ask a question, or type / for commands" onSubmit={submit} />}
             </div>
           )}
         </div>

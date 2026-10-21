@@ -8,15 +8,16 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 
 // everything the owner created in the app, as one JSON file (token secrets do not exist in the database, so none can be exported)
 async function exportOwnerBackup(notify: (m: string) => void) {
-  if (!supabase) return;
+  const pid = useStore.getState().projectId;
+  if (!supabase || !pid) return;
   const sb = supabase;
   const [proj, pages, sets, ver, ev, toks] = await Promise.all([
-    sb.from("projects").select("id,slug,name,description,ai_guide,ai_paused,visibility").order("created_at").limit(1),
-    sb.from("docs").select("id,ref,kind,title,body,rev,updated_at,deleted_at").eq("source", "native"),
-    sb.from("change_sets").select("id,title,summary,client,created_at,deleted_at,doc_drafts(id,doc_ref,op,status,rationale,note,reject_reason,risk_score,risk_flags,payload,result_title,result_body,base_rev,applied_rev,reverted_at,created_at,decided_at)").order("created_at", { ascending: false }).limit(1000),
-    sb.from("instruction_versions").select("token_id,body,at").order("at", { ascending: false }).limit(500),
-    sb.from("token_events").select("token_id,action,detail,at").order("at", { ascending: false }).limit(500),
-    sb.from("mcp_tokens").select("id,label,mode,path_prefixes,daily_limit,max_pending,expires_at,revoked_at,created_at,ai_note")
+    sb.from("projects").select("id,slug,name,description,ai_guide,ai_paused,visibility").eq("id", pid).limit(1),
+    sb.from("docs").select("id,ref,kind,title,body,rev,updated_at,deleted_at").eq("project_id", pid).eq("source", "native"),
+    sb.from("change_sets").select("id,title,summary,client,created_at,deleted_at,doc_drafts(id,doc_ref,op,status,rationale,note,reject_reason,risk_score,risk_flags,payload,result_title,result_body,base_rev,applied_rev,reverted_at,created_at,decided_at)").eq("project_id", pid).order("created_at", { ascending: false }).limit(1000),
+    sb.from("instruction_versions").select("token_id,body,at").eq("project_id", pid).order("at", { ascending: false }).limit(500),
+    sb.from("token_events").select("token_id,action,detail,at").eq("project_id", pid).order("at", { ascending: false }).limit(500),
+    sb.from("mcp_tokens").select("id,label,mode,path_prefixes,daily_limit,max_pending,expires_at,revoked_at,created_at,ai_note").eq("project_id", pid)
   ]);
   const bad = [proj, pages, sets, ver, ev, toks].find((r) => r.error);
   if (bad?.error) { notify(`Backup failed: ${bad.error.message}`); return; }
@@ -31,7 +32,7 @@ async function exportOwnerBackup(notify: (m: string) => void) {
 // a plain-text map of the documentation for AI tools that read files (the MCP address is public; tokens are never included)
 async function exportLlmsTxt(notify: (m: string) => void, mcpUrl: string) {
   if (!supabase) return;
-  const { data: ps } = await supabase.from("projects").select("id,name,description").order("created_at").limit(1);
+  const { data: ps } = await supabase.from("projects").select("id,name,description").eq("id", useStore.getState().projectId).limit(1);
   const p = ps?.[0]; if (!p) { notify("No project found"); return; }
   const { data, error } = await supabase.from("docs").select("ref,kind,title").eq("project_id", p.id).is("deleted_at", null).order("kind").order("ref").limit(2000);
   if (error) { notify(error.message); return; }
@@ -75,13 +76,13 @@ function useTitleBadge() {
 
 // owner only: shows where an accepted AI edit changed this chapter (the newest version of each section is still the AI's, not undone or overwritten)
 function AiTrail({ prefix }: { prefix: string }) {
-  const { isAdmin, liveTick, go } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, liveTick: s.liveTick, go: s.go })));
+  const { isAdmin, liveTick, go, projectId } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, liveTick: s.liveTick, go: s.go, projectId: s.projectId })));
   const [rows, setRows] = useState<{ ref: string; at: string }[]>([]);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!isAdmin || !supabase) { setRows([]); return; }
     let off = false;
-    void supabase.from("doc_revisions").select("ref,kind,rev,created_at").or(`ref.eq.${prefix},ref.like.${prefix}#%`).in("kind", ["ai", "revert", "edit"]).order("created_at", { ascending: false }).limit(60)
+    void supabase.from("doc_revisions").select("ref,kind,rev,created_at").eq("project_id", projectId).or(`ref.eq.${prefix},ref.like.${prefix}#%`).in("kind", ["ai", "revert", "edit"]).order("created_at", { ascending: false }).limit(60)
       .then(({ data, error }) => {
         if (off || error) return;
         const seen = new Set<string>(); const out: { ref: string; at: string }[] = [];
@@ -89,7 +90,7 @@ function AiTrail({ prefix }: { prefix: string }) {
         setRows(out);
       });
     return () => { off = true; };
-  }, [isAdmin, prefix, liveTick]);
+  }, [isAdmin, prefix, liveTick, projectId]);
   if (rows.length === 0) return null;
   return (
     <div className="blk" style={{ fontFamily: "var(--sans)", margin: "0 0 14px" }}>

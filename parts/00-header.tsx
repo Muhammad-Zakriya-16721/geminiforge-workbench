@@ -6,13 +6,15 @@ import { useShallow } from "zustand/react/shallow";
 import {
   PanelLeft, Plus, BookOpen, Layers, Cpu, Network, Box, FileText, ShieldCheck, Sparkles,
   ArrowUp, Copy, Check, X, Code2, ChevronRight, ChevronDown, Zap, RotateCcw, FolderKanban, Lock,
-  Search, List, Bookmark, Settings, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud, Inbox, KeyRound, Undo2, Pause, Play, RefreshCw, Trash2
+  Search, List, Bookmark, Settings, Building2, Keyboard, Info, Database, SlidersHorizontal, FlaskConical, MessageSquare, ListChecks, Download, Upload, Cloud, Inbox, KeyRound, Undo2, Pause, Play, RefreshCw, Trash2
 } from "lucide-react";
 
 // #region 1. TYPES
 export type ChapterId = string;
 export type PaneKind = "crate" | "pack" | "prompt" | "confirm" | "patch" | "spike" | "os" | "lab";
 export interface PaneRef { kind: PaneKind; id: string }
+export interface WsOrg { id: string; slug: string; name: string; role: "owner" | "admin" | "member" }
+export interface WsProject { id: string; slug: string; name: string; description: string; visibility: string; org_id: string | null; role: "manager" | "editor" | "viewer" }
 export type View =
   | { kind: "home" }
   | { kind: "chapter"; id: ChapterId; sec?: string }
@@ -24,7 +26,10 @@ export type View =
   | { kind: "pages"; ref?: string }
   | { kind: "trash" }
   | { kind: "inbox" }
-  | { kind: "access" };
+  | { kind: "access" }
+  | { kind: "orgs" }
+  | { kind: "project" }
+  | { kind: "join"; token: string };
 export type MotionMode = "full" | "reduced" | "system";
 export type Depth = "brief" | "standard" | "detailed";
 export type PromptStatus = "todo" | "running" | "done";

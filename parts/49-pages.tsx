@@ -68,7 +68,7 @@ interface RevRow { rev: number; kind: string; created_at: string; title: string 
 const REV_LABEL: Record<string, string> = { ai: "Accepted AI edit", revert: "Undo", edit: "Edit", sync: "Generated" };
 
 export function PagesView({ refId }: { refId?: string }) {
-  const { isAdmin, adminChecked, notify, go, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, go: s.go, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const { isAdmin: canEdit, projectId, adminChecked, notify, go, cloudState, liveTick } = useStore(useShallow((s) => ({ projectId: s.projectId, isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, go: s.go, cloudState: s.cloudState, liveTick: s.liveTick })));
   const [rows, setRows] = useState<PageRow[] | null>(null);
   const [page, setPage] = useState<PageRow | null>(null);
   const [revs, setRevs] = useState<RevRow[]>([]);
@@ -80,20 +80,20 @@ export function PagesView({ refId }: { refId?: string }) {
 
   const loadList = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at").eq("source", "native").is("deleted_at", null).order("updated_at", { ascending: false }).limit(200);
+    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at").eq("project_id", projectId).eq("source", "native").is("deleted_at", null).order("updated_at", { ascending: false }).limit(200);
     if (error) { setErr(error.message); return; }
     setErr(""); setRows((data ?? []) as PageRow[]);
-  }, []);
+  }, [projectId]);
   const loadPage = useCallback(async (r: string) => {
     if (!supabase) return;
-    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at,body").eq("source", "native").is("deleted_at", null).eq("ref", r).maybeSingle();
+    const { data, error } = await supabase.from("docs").select("id,project_id,ref,kind,title,rev,updated_at,body").eq("project_id", projectId).eq("source", "native").is("deleted_at", null).eq("ref", r).maybeSingle();
     if (error) { setErr(error.message); return; }
     setErr(""); setPage((data as PageRow | null) ?? null); setEditing(false);
     if (data) {
       const { data: rv } = await supabase.from("doc_revisions").select("rev,kind,created_at,title").eq("doc_id", data.id).order("rev", { ascending: false }).limit(30);
       setRevs((rv ?? []) as RevRow[]);
     }
-  }, []);
+  }, [projectId]);
   useEffect(() => { setPage(null); }, [refId]);
   // an update from the server refreshes in place; while you are editing it must not overwrite your text
   useEffect(() => { if (refId) { if (!editing) void loadPage(refId); } else void loadList(); }, [refId, loadList, loadPage, liveTick]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -133,9 +133,8 @@ export function PagesView({ refId }: { refId?: string }) {
     if (!supabase || !ttl.trim()) return false;
     // titles in other scripts (Urdu, Arabic, ...) have no Latin letters, so they get a short generated id; the title itself is kept as typed
     const slug = ttl.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || `p-${Date.now().toString(36)}`;
-    const { data: ps } = await supabase.from("projects").select("id").order("created_at").limit(1);
-    if (!ps?.[0]) { notify("No project found"); return false; }
-    const { error } = await supabase.from("docs").insert({ project_id: ps[0].id, ref: `page:${slug}`, kind: "page", title: ttl.trim().slice(0, 200), body: text, source: "native" });
+    if (!projectId) { notify("No project selected"); return false; }
+    const { error } = await supabase.from("docs").insert({ project_id: projectId, ref: `page:${slug}`, kind: "page", title: ttl.trim().slice(0, 200), body: text, source: "native" });
     if (error) { notify(error.code === "23505" ? "A page with that name already exists (it may be in the Trash)" : error.message); return false; }
     go({ kind: "pages", ref: `page:${slug}` });
     return true;
@@ -158,8 +157,8 @@ export function PagesView({ refId }: { refId?: string }) {
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta">Sign in under Settings, then Sync, to see pages.</p></div>;
-  if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta" role="status">Loading…</p></div>;
-  if (!isAdmin) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta">This account is not an administrator of the documentation.</p></div>;
+  if (!projectId && !adminChecked) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta" role="status">Loading…</p></div>;
+  if (!projectId) return <div className="col enter"><h1 className="view-h">Added pages</h1><p className="meta">You have no project yet. Ask a project manager to invite you.</p></div>;
 
   if (!refId) {
     return (
@@ -167,11 +166,11 @@ export function PagesView({ refId }: { refId?: string }) {
         <style>{AI_CSS}{PAGES_CSS}</style>
         <h1 className="view-h">Added pages</h1>
         <p className="meta">Pages that are not generated from the specification data: documents an AI tool proposed and you accepted, and pages you write yourself. The chapters, crates, packs and the rest stay under their own sections.</p>
-        <form className="ai-bar" onSubmit={create}>
+        {canEdit && <form className="ai-bar" onSubmit={create}>
           <input className="set-in" style={{ width: 260 }} aria-label="New page title" placeholder="New page title" maxLength={120} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
           <button type="submit" className="btn" disabled={!newTitle.trim()}><Plus size={14} aria-hidden />New page</button>
           <label className="btn" style={{ cursor: "pointer" }}>Import a Markdown file<input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" style={{ position: "absolute", width: 1, height: 1, opacity: 0 }} onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ""; }} /></label>
-        </form>
+        </form>}
         {err && <p className="banner" data-k="conflict" role="alert">{err}</p>}
         {rows === null && !err && <p className="meta" role="status">Loading…</p>}
         {rows?.length === 0 && <p className="meta">No added pages yet.</p>}
@@ -194,12 +193,12 @@ export function PagesView({ refId }: { refId?: string }) {
           <h1 className="view-h">{page.title}</h1>
           <p className="meta"><span className="mono">{page.ref}</span> · version {page.rev} · {ago(page.updated_at)}</p>
           <div className="actions">
-            {!editing && <button type="button" className="btn" onClick={() => { setDraft(page.body ?? ""); setTitle(page.title); setEditing(true); }}>Edit</button>}
+            {canEdit && !editing && <button type="button" className="btn" onClick={() => { setDraft(page.body ?? ""); setTitle(page.title); setEditing(true); }}>Edit</button>}
             {editing && <button type="button" className="btn btn-primary" onClick={() => void save()}>Save</button>}
             {editing && <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>}
             <button type="button" className="btn btn-ghost" onClick={async () => notify((await copyText(page.body ?? "")) ? "Copied as Markdown" : "Could not copy")}><Copy size={14} aria-hidden />Copy Markdown</button>
             <button type="button" className="btn btn-ghost" onClick={downloadMd}>Download .md</button>
-            <button type="button" className="btn btn-ghost" onClick={() => void trashPage()}><Trash2 size={14} aria-hidden />Move to Trash</button>
+            {canEdit && <button type="button" className="btn btn-ghost" onClick={() => void trashPage()}><Trash2 size={14} aria-hidden />Move to Trash</button>}
           </div>
           {editing ? (
             <>
@@ -214,7 +213,7 @@ export function PagesView({ refId }: { refId?: string }) {
           {revs.map((r) => (
             <div key={r.rev} className="ai-tok">
               <b>Version {r.rev}</b><span className={`chip ${r.kind === "ai" ? "warn" : ""}`}>{REV_LABEL[r.kind] ?? r.kind}</span><span className="meta" style={{ margin: 0 }}>{ago(r.created_at)}</span><span className="sp" />
-              {r.rev !== page.rev && <button type="button" className="btn" onClick={() => void restore(r.rev)}><Undo2 size={14} aria-hidden />Restore</button>}
+              {canEdit && r.rev !== page.rev && <button type="button" className="btn" onClick={() => void restore(r.rev)}><Undo2 size={14} aria-hidden />Restore</button>}
             </div>
           ))}
         </>

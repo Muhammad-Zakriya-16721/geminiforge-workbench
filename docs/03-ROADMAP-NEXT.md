@@ -12,7 +12,7 @@ Live updates (Realtime), review inbox + side panel + highlight, Trash + retentio
 - The master-file -> phases -> steps/decisions/checkmarks structure is the core product (docs/01).
 
 ## Phases
-- **P5a** Organizations + membership + RLS rewrite (keep `app_admins` as super-admin).  **P5b** project switcher, routes, project settings.  **P5c** node types, templates, master/phase views, checkboxes, decisions.
+- **P5a DONE 2026-10-22** Organizations + membership + RLS rewrite (`app_admins` stays super-admin).  **P5b DONE 2026-10-22** project switcher, project settings, invitation links.  **P5c** node types, templates, master/phase views, checkboxes, decisions.
 - **P5d** direct editor for every document + migrate derived spec docs to native (docs/01 step 6).  **P5e** drag-and-drop order, internal links, backlinks.
 - **P6** retention setting + timer UI; token upgrade (docs/04 items 1-5); anomaly alerts.
 - **P7** ask-the-docs (OpenRouter pinned model list, verbatim quote check, cache, 40-question eval) after keys.

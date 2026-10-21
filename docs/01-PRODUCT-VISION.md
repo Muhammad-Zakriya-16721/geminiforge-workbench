@@ -40,3 +40,6 @@ Keep ALL permission logic inside those two functions so policies and RPCs do not
 
 ## UX principles
 Chat-style reader stays for Q&A; editing is always one click away from reading ("Edit this" on any passage); every destructive action has Trash/Undo; one search box (Ctrl+K) across org > project > documents; mobile first.
+
+## Status 2026-10-22
+Done: steps 1-2 of "Build order" (organizations with invited-only projects, project settings page, roles, invitation links, switcher) - see docs/08 progress log and migrations 0015*. Not done: steps 3-7 (node types and templates, master/phase/step/decision views, full editor, migration of the spec to native documents, per-project AI policy).

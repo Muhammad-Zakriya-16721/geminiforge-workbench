@@ -42,7 +42,8 @@ const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 function sanitizeView(v: unknown): View {
   if (isObj(v) && v.kind === "chapter" && isStr(v.id) && chapterIds().includes(v.id as ChapterId)) return { kind: "chapter", id: v.id as ChapterId };
   if (isObj(v) && v.kind === "thread" && isStr(v.id)) return { kind: "thread", id: v.id };
-  if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit" || v.kind === "inbox" || v.kind === "access" || v.kind === "trash")) return { kind: v.kind };
+  if (isObj(v) && (v.kind === "library" || v.kind === "tracker" || v.kind === "history" || v.kind === "audit" || v.kind === "inbox" || v.kind === "access" || v.kind === "trash" || v.kind === "orgs" || v.kind === "project")) return { kind: v.kind };
+  if (isObj(v) && v.kind === "join" && isStr(v.token) && /^iv_[0-9a-f]{64}$/.test(v.token)) return { kind: "join", token: v.token };
   if (isObj(v) && v.kind === "pages") return { kind: "pages", ref: isStr(v.ref) ? v.ref : undefined };
   return { kind: "home" };
 }
@@ -153,6 +154,9 @@ export function parseHash(h: string): { view: View | null; pane: PaneRef | null 
   else if (seg[0] === "trash") view = { kind: "trash" };
   else if (seg[0] === "pages") view = { kind: "pages", ref: seg[1] };
   else if (seg[0] === "access") view = { kind: "access" };
+  else if (seg[0] === "orgs") view = { kind: "orgs" };
+  else if (seg[0] === "project") view = { kind: "project" };
+  else if (seg[0] === "join" && /^iv_[0-9a-f]{64}$/.test(seg[1] ?? "")) view = { kind: "join", token: seg[1] };
   else if (seg[0] === "home") view = { kind: "home" };
   return { view, pane };
 }
@@ -168,6 +172,9 @@ export function toHash(view: View, pane: PaneRef | null): string {
   else if (view.kind === "trash") path = "/trash";
   else if (view.kind === "pages") path = `/pages${view.ref ? "/" + encodeURIComponent(view.ref) : ""}`;
   else if (view.kind === "access") path = "/access";
+  else if (view.kind === "orgs") path = "/orgs";
+  else if (view.kind === "project") path = "/project";
+  else if (view.kind === "join") path = `/join/${view.token}`;
   return `#${path}${pane ? "?p=" + encodeURIComponent(`${pane.kind}:${pane.id}`) : ""}`;
 }
 
@@ -193,7 +200,11 @@ interface Store extends Persisted {
   cloudEmail: string;
   cloudAt: number;
   cloudMsg: string;
-  isAdmin: boolean;
+  isAdmin: boolean; // can edit the selected project (manager or editor): review inbox, Trash, page editing
+  isManager: boolean; // manages the selected project (settings, members, AI tokens)
+  workspace: { super: boolean; orgs: WsOrg[]; projects: WsProject[] } | null; // what the signed-in user may open
+  projectId: string; // the selected project (empty until the workspace is loaded)
+  setProject: (id: string) => void;
   adminChecked: boolean; // true once the administrator check has finished (so views can show "Loading" instead of "not an administrator")
   inboxCount: number;
   liveTick: number;
@@ -267,6 +278,16 @@ export const useStore = create<Store>((set, get) => ({
   cloudAt: 0,
   cloudMsg: "",
   isAdmin: false,
+  isManager: false,
+  workspace: null,
+  projectId: "",
+  setProject: (id) => {
+    const p = get().workspace?.projects.find((x) => x.id === id);
+    if (!p) return;
+    try { window.localStorage.setItem("gf_project", id); } catch { /* the choice is just not remembered */ }
+    set((s) => ({ projectId: id, isAdmin: p.role === "manager" || p.role === "editor", isManager: p.role === "manager", inboxCount: 0, trashCount: 0, liveTick: s.liveTick + 1 }));
+    void refreshAi();
+  },
   adminChecked: false,
   inboxCount: 0,
   liveTick: 0,

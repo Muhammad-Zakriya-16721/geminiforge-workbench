@@ -51,18 +51,27 @@ export async function refreshAi(): Promise<void> {
   try {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
-    if (!uid) { useStore.setState({ isAdmin: false, adminChecked: true, inboxCount: 0, trashCount: 0 }); stopLive(); return; }
-    const { data: a, error: ae } = await supabase.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
-    if (ae) { useStore.setState({ adminChecked: true }); return; } // a failed check must not look like "not an administrator"
-    if (!a) { useStore.setState({ isAdmin: false, adminChecked: true, inboxCount: 0 }); stopLive(); return; }
-    const { count, error: ce } = await supabase.from("doc_drafts").select("id", { count: "exact", head: true }).eq("status", "pending");
-    if (ce) { useStore.setState({ isAdmin: true, adminChecked: true }); startLive(); return; }
+    if (!uid) { useStore.setState({ isAdmin: false, isManager: false, workspace: null, projectId: "", adminChecked: true, inboxCount: 0, trashCount: 0 }); stopLive(); return; }
+    const { data: ws, error: we } = await supabase.rpc("my_workspace");
+    if (we || !ws) { useStore.setState({ adminChecked: true }); return; } // a failed check must not look like "no access"
+    const w = ws as { super: boolean; orgs: WsOrg[]; projects: WsProject[] };
+    const st = useStore.getState();
+    let stored = ""; try { stored = window.localStorage.getItem("gf_project") ?? ""; } catch { /* no storage */ }
+    const pid = [st.projectId, stored].find((x) => x && w.projects.some((p) => p.id === x)) ?? (w.projects.find((p) => p.slug === "geminiforge") ?? w.projects[0])?.id ?? "";
+    const cur = w.projects.find((p) => p.id === pid);
+    const can = cur?.role === "manager" || cur?.role === "editor";
+    const same = JSON.stringify(st.workspace) === JSON.stringify(w);
+    useStore.setState({ workspace: same ? st.workspace : w, projectId: pid, isAdmin: can, isManager: cur?.role === "manager", adminChecked: true });
+    if (!cur || !can) { useStore.setState({ inboxCount: 0, trashCount: 0 }); stopLive(); return; }
+    const { count, error: ce } = await supabase.from("doc_drafts").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("status", "pending");
+    if (ce) { startLive(); return; }
     const [te, tp] = await Promise.all([
-      supabase.from("change_sets").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
-      supabase.from("docs").select("id", { count: "exact", head: true }).eq("source", "native").not("deleted_at", "is", null)
+      supabase.from("change_sets").select("id", { count: "exact", head: true }).eq("project_id", pid).not("deleted_at", "is", null),
+      supabase.from("docs").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("source", "native").not("deleted_at", "is", null)
     ]);
+    if (useStore.getState().projectId !== pid) return; // the user switched project while this ran
     const changed = useStore.getState().inboxCount !== (count ?? 0);
-    useStore.setState((s) => ({ isAdmin: true, adminChecked: true, inboxCount: count ?? 0, trashCount: te.error || tp.error ? s.trashCount : (te.count ?? 0) + (tp.count ?? 0), liveTick: changed ? s.liveTick + 1 : s.liveTick }));
+    useStore.setState((x) => ({ inboxCount: count ?? 0, trashCount: te.error || tp.error ? x.trashCount : (te.count ?? 0) + (tp.count ?? 0), liveTick: changed ? x.liveTick + 1 : x.liveTick }));
     startLive();
   } catch { /* keep the last known state */ }
 }
@@ -167,7 +176,7 @@ function LiveDot({ state }: { state: "off" | "connecting" | "live" | "retry" }) 
 }
 
 export function InboxView() {
-  const { isAdmin, adminChecked, notify, cloudState, liveTick, liveState } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick, liveState: s.liveState })));
+  const { isAdmin, projectId, adminChecked, notify, cloudState, liveTick, liveState } = useStore(useShallow((s) => ({ projectId: s.projectId, isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick, liveState: s.liveState })));
   const { ask, node: confirmNode } = useConfirm();
   const [limit, setLimit] = useState(60);
   const [more, setMore] = useState(false);
@@ -194,9 +203,9 @@ export function InboxView() {
     if (!supabase) return;
     const cols = "id,project_id,change_set_id,doc_ref,base_rev,op,rationale,status,note,reject_reason,risk_score,risk_flags,new_doc,result_title,applied_rev,reverted_at,created_at,decided_at";
     const [{ data, error }, waiting] = await Promise.all([
-      supabase.from("change_sets").select(`id,project_id,title,summary,client,created_at,doc_drafts(${cols})`).is("deleted_at", null).order("created_at", { ascending: false }).limit(limit),
+      supabase.from("change_sets").select(`id,project_id,title,summary,client,created_at,doc_drafts(${cols})`).eq("project_id", projectId).is("deleted_at", null).order("created_at", { ascending: false }).limit(limit),
       // sets with waiting edits always show, however old they are
-      supabase.from("change_sets").select(`id,project_id,title,summary,client,created_at,doc_drafts!inner(${cols})`).is("deleted_at", null).eq("doc_drafts.status", "pending").order("created_at", { ascending: false }).limit(200)
+      supabase.from("change_sets").select(`id,project_id,title,summary,client,created_at,doc_drafts!inner(${cols})`).eq("project_id", projectId).is("deleted_at", null).eq("doc_drafts.status", "pending").order("created_at", { ascending: false }).limit(200)
     ]);
     if (error) { setErr(error.message); return; }
     setErr("");
@@ -210,7 +219,7 @@ export function InboxView() {
       for (const x of docs ?? []) t[x.ref as string] = x.title as string;
     }
     setTitles(t); setSets(rows);
-  }, [limit]);
+  }, [limit, projectId]);
   useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load, liveTick]);
 
   const flatRef = useRef<string[]>([]);
@@ -289,7 +298,7 @@ export function InboxView() {
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">Sign in under Settings, then Sync, to review edits that AI tools propose.</p></div>;
   if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta" role="status">Loading…</p></div>;
-  if (!isAdmin) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">This account is not an administrator of the documentation, so there is nothing to review.</p></div>;
+  if (!isAdmin) return <div className="col enter"><h1 className="view-h">Review inbox</h1><p className="meta">Reviewing edits needs the editor or manager role in this project.</p></div>;
   return (
     <div className="col enter" style={{ fontFamily: "var(--sans)", ...(peekRow ? { maxWidth: "min(1280px, 100%)" } : {}) }}>
       <style>{AI_CSS}{PEEK_CSS}</style>
@@ -405,7 +414,7 @@ function TokenEditor({ t, versions, ask, onDone }: { t: TokenRow; versions: Vers
 }
 
 export function AccessView() {
-  const { isAdmin, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isAdmin: s.isAdmin, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
+  const { isManager, projectId, adminChecked, notify, cloudState, liveTick } = useStore(useShallow((s) => ({ isManager: s.isManager, projectId: s.projectId, adminChecked: s.adminChecked, notify: s.notify, cloudState: s.cloudState, liveTick: s.liveTick })));
   const guideBase = useRef(""); // the saved text; the box is only overwritten by a reload while it still equals this
   const [project, setProject] = useState<{ id: string; slug: string; name: string; paused: boolean } | null>(null);
   const [guide, setGuide] = useState("");
@@ -426,7 +435,7 @@ export function AccessView() {
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data: ps, error } = await supabase.from("projects").select("id,slug,name,ai_paused,ai_guide").order("created_at").limit(1);
+    const { data: ps, error } = await supabase.from("projects").select("id,slug,name,ai_paused,ai_guide").eq("id", projectId).limit(1);
     if (error || !ps?.[0]) { setErr(error?.message ?? "No project found"); return; }
     const p = { id: ps[0].id as string, slug: ps[0].slug as string, name: ps[0].name as string, paused: !!ps[0].ai_paused };
     setProject(p); setErr("");
@@ -443,9 +452,9 @@ export function AccessView() {
       supabase.rpc("mcp_audit_log", { p_slug: p.slug, p_limit: 40 })
     ]);
     setTokens((t.data ?? []) as TokenRow[]); setAudit((a.data ?? []) as AuditRow[]);
-  }, []);
-  useEffect(() => { if (isAdmin) void load(); }, [isAdmin, load, liveTick]);
-  useEffect(() => () => setSecret(""), []);
+  }, [projectId]);
+  useEffect(() => { if (isManager) void load(); }, [isManager, load, liveTick]);
+  useEffect(() => () => setSecret(""), [projectId]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -518,8 +527,8 @@ export function AccessView() {
   };
 
   if (!CLOUD_AVAILABLE || (cloudState !== "synced" && cloudState !== "syncing" && cloudState !== "error")) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta">Sign in under Settings, then Sync, to manage AI access.</p></div>;
-  if (!isAdmin && !adminChecked) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta" role="status">Loading…</p></div>;
-  if (!isAdmin) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta">This account is not an administrator of the documentation.</p></div>;
+  if (!isManager && !adminChecked) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta" role="status">Loading…</p></div>;
+  if (!isManager) return <div className="col enter"><h1 className="view-h">AI access</h1><p className="meta">Only a manager of this project can manage AI access.</p></div>;
   const url = `${base}/${secret || "TOKEN"}`;
   const snips = {
     gemini: `Gemini app: Settings → Apps → Add custom app → URL:\n${url}\n(no sign-in option)`,
