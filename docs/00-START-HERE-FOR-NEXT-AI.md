@@ -45,7 +45,7 @@ Source of truth is `parts/*.tsx` (sorted by file name = order in the final file)
 - Playwright tests mock Supabase with `route.fulfill`; count queries need `access-control-expose-headers: content-range`; fake session key `sb-<ref>-auth-token`.
 - React 18 must stay (Canvas runtime). Do not add `key={contentRev}` to the root (scroll-jump bug).
 - Never put keys in chat, code, or git. Edge Function secrets go through the Supabase dashboard.
-- ZWNJ/ZWJ must stay allowed in text (Urdu/Persian/emoji).
+- ZWNJ/ZWJ must stay allowed in text (emoji sequences).
 
 - PL/pgSQL: `if not (a or b)` does not fire when the condition is NULL; wrap nullable checks in coalesce(). Run tests/rls-matrix.sql after any change to access functions.
 
