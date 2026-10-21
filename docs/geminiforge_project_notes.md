@@ -176,3 +176,6 @@ RESEARCH SUMMARY and the phased plan: docs/ROADMAP.md (Phases 1-8, problems E1-E
 
 ## ROUND 18 (2026-10-20) hand-off
 Owner hit their usage limit. Daily research task deleted. Wrote docs/00-07 (hand-off, vision, architecture, roadmap, security, 150 ideas, API plan, limits). Owner decisions: multiple orgs/projects are main; direct editing of all documents/chapters; trash timer in app; master file -> phases -> steps/decisions product; API keys later. No code changed this round. Folder restructure (R0) deliberately NOT done (risk).
+
+## ROUND 19 (2026-10-21) Step 1 quick fixes
+Features page/changelog 0.5.0, toast hold (store.holdToast), checkbox 24px, beforeunload warning on unsaved page edits, CI runs qa-ai/qa-content/MCP tests, README fixed, docs/08 = single remaining list, docs/03 decisions (private docs + share links, English only, roles recommendation). Tests: qa-ai 92, qa-content 12, prodcheck 101 (one throttled-timing flake seen once, passes on rerun), mcp 31, Canvas build ok. Token revoked by owner. NOTE: project geminiforge is still `public` (content bundle RPC and anonymous MCP read are public) until P5-V is built.

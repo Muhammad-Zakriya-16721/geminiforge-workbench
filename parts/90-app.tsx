@@ -202,7 +202,7 @@ export default function App() {
       </main>
       <div className="scrim" onClick={() => useStore.getState().set({ sidebarOpen: false })} aria-hidden />
       <div className="pane-col" data-open={!!pane} ref={inertRef(!pane)}>{shown && <Pane pane={shown} />}</div>
-      {toast && <div className="toast" role="status">{toast}{toastUndo && <button type="button" className="toast-undo" onClick={() => { toastUndo(); useStore.getState().notify("Restored"); }}>Undo</button>}</div>}
+      {toast && <div className="toast" role="status" onMouseEnter={() => useStore.getState().holdToast(true)} onMouseLeave={() => useStore.getState().holdToast(false)} onFocus={() => useStore.getState().holdToast(true)} onBlur={() => useStore.getState().holdToast(false)}>{toast}{toastUndo && <button type="button" className="toast-undo" onClick={() => { toastUndo(); useStore.getState().notify("Restored"); }}>Undo</button>}</div>}
       <Palette />
       <ImportDialog />
       <SettingsDialog onAsk={submit} />

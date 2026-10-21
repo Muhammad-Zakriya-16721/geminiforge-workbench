@@ -50,3 +50,7 @@ Live DB: 1 project, 120 derived docs, 0 native docs, `project_members` = 0 rows 
 3. B1-B3 together as one design (Organizations > projects > master file/phases/steps; editor; migrate the spec to native docs). Needs your answers to C6 first.
 4. B8 token upgrades, then B4/B5 ask-the-docs after you pick the key option (C3).
 5. B11/B12 reader features, B7 OAuth last.
+
+## F. Progress log
+- 2026-10-21 Step 1 done: Features page + changelog + version 0.5.0 list the AI space, Trash, pages, tokens, backup; toast pauses on hover/focus; list checkboxes 24 px; unsaved page text warns on tab close; CI now also runs qa-ai, qa-content and the MCP offline tests. Left from Step 1: merge the two `docs` SELECT policies and drop `mcp_audit_recent` (both need the SQL dashboard because DROP hangs the SQL tool).
+- Owner answers 2026-10-21: token revoked; keys not a concern; MFA/leaked-password not available (free plan); docs private + optional share links; English only. See docs/03.

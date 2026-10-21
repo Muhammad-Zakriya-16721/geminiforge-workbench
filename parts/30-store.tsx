@@ -216,6 +216,7 @@ interface Store extends Persisted {
   setPalette: (v: boolean) => void;
   setMenu: (v: boolean) => void;
   notify: (msg: string, undo?: () => void) => void;
+  holdToast: (hold: boolean) => void; // pointer or keyboard focus on the toast pauses its timer (WCAG 2.2.1)
   setSpike: (id: string, p: Partial<{ status: SpikeStatus; note: string }>) => void;
   setAudit: (id: string, p: Partial<{ status: AuditStatus; note: string }>) => void;
   deleteThreads: (ids: string[]) => void;
@@ -302,6 +303,10 @@ export const useStore = create<Store>((set, get) => ({
     set({ toast, toastUndo: undo ?? null });
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => set({ toast: "", toastUndo: null }), undo ? 8000 : 3200);
+  },
+  holdToast: (hold) => {
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    if (!hold && get().toast) toastTimer = setTimeout(() => set({ toast: "", toastUndo: null }), 4000);
   },
   setSpike: (id, p) => set((s) => ({ spikes: { ...s.spikes, [id]: { ...(s.spikes[id] ?? { status: "todo" as SpikeStatus, note: "" }), ...p } } })),
   setAudit: (id, p) => set((s) => ({ audit: { ...s.audit, [id]: { ...(s.audit[id] ?? { status: "open" as AuditStatus, note: "" }), ...p } } })),

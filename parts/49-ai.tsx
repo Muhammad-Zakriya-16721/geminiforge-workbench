@@ -26,7 +26,7 @@ const AI_CSS = `
 .ai-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px;margin:8px 0 12px}.ai-form label{display:flex;flex-direction:column;gap:4px;font:500 12px var(--sans);color:var(--tx3)}
 .ai-form .set-in{width:100%}
 .ai-tbl{width:100%;border-collapse:collapse;font:400 12.5px var(--sans)}.ai-tbl th{text-align:left;color:var(--tx4);font-weight:500;padding:4px 8px}.ai-tbl td{padding:4px 8px;border-top:1px solid var(--line);color:var(--tx2);word-break:break-word}
-input[type=checkbox].ai-ck{width:20px;height:20px;margin:2px 6px 2px 0;accent-color:var(--accent,#d97757);vertical-align:middle}
+input[type=checkbox].ai-ck{width:24px;height:24px;margin:2px 6px 2px 0;accent-color:var(--accent,#d97757);vertical-align:middle}
 @media (forced-colors:active){.ai-diff ins{outline:1px solid Highlight}.ai-diff del{outline:1px dashed CanvasText}.ai-d:focus-visible{outline:2px solid Highlight}}
 `;
 

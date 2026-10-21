@@ -98,6 +98,13 @@ export function PagesView({ refId }: { refId?: string }) {
   // an update from the server refreshes in place; while you are editing it must not overwrite your text
   useEffect(() => { if (refId) { if (!editing) void loadPage(refId); } else void loadList(); }, [refId, loadList, loadPage, liveTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // leaving the tab or closing the window with unsaved text asks first (shortcut: moving to another screen inside the app is not guarded)
+  useEffect(() => {
+    if (!editing || !page || draft === (page.body ?? "")) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editing, page, draft]);
   const save = async () => {
     if (!supabase || !page) return;
     // only if nobody changed the page since it was opened (an accepted AI edit would otherwise be overwritten)

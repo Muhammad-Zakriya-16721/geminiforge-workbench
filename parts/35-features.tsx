@@ -2,13 +2,23 @@
 // Edit this region when you add or change a workbench feature; the Settings pages render straight from it.
 export const TEXT_PX: Record<TextSize, string> = { s: "15.5px", m: "17px", l: "19px" };
 export const WIDTH_PX: Record<ColWidth, string> = { narrow: "680px", normal: "780px", wide: "920px" };
-export const APP_VERSION = "0.4.0";
-export const BUILD_DATE = "2026-10-17";
+export const APP_VERSION = "0.5.0";
+export const BUILD_DATE = "2026-10-21";
 
 export type FeatAction = { go: View } | { pane: PaneRef } | { ask: string } | { tab: string };
 export interface Feature { group: string; name: string; desc: string; how: string; act?: { label: string; to: FeatAction } }
 
 export const FEATURES: Feature[] = [
+  { group: "AI space (owner)", name: "Review inbox", desc: "Everything an AI tool proposes through MCP waits here. Nothing becomes official until you accept it. Each edit shows a diff, the AI's reason and plain-language risk flags (numbers changed, new link, looks like instructions to an AI, and more).", how: "Sidebar: Review inbox. With an edit focused: j / k move, a accepts, r rejects, v opens the page.", act: { label: "Open Review inbox", to: { go: { kind: "inbox" } } } },
+  { group: "AI space (owner)", name: "Page panel with highlight", desc: "Open the page an edit touches in a side panel, with the changed passage highlighted. Accept or reject from the panel, or open the real chapter.", how: "Review inbox: View page." },
+  { group: "AI space (owner)", name: "Undo and history", desc: "Every accepted edit becomes a new version you can undo; accepted edits are kept as history. Chapters show an \"AI edited\" marker with the sections touched.", how: "Review inbox: Decided, then Undo." },
+  { group: "AI space (owner)", name: "Live updates", desc: "New edits and decisions appear by themselves, without reloading or losing your place. A Live / Reconnecting badge shows the connection.", how: "Open the Review inbox; the tab title shows (n) when edits wait." },
+  { group: "AI space (owner)", name: "AI access", desc: "Create, edit, rename, extend and revoke access tokens; choose read-only or propose mode, expiry, daily limit, waiting-edit cap and which document ids a token may reach. Pause all AI access with one switch. A message for AI tools (project-wide or per token) is shown to the AI by get_guide, with version history.", how: "Sidebar: AI access.", act: { label: "Open AI access", to: { go: { kind: "access" } } } },
+  { group: "AI space (owner)", name: "Checks, activity and logs", desc: "A checks list (tokens expiring, never used, too broad), the recent calls of every AI tool with the reason for failures, a log of token changes, and a button to clear activity. Old activity is cleaned automatically after 180 days.", how: "AI access page." },
+  { group: "AI space (owner)", name: "Backup and llms.txt", desc: "Download one JSON backup of your added pages with history, all change sets and decisions, messages and token settings (never secrets), or a plain-text map of all documents for AI tools.", how: "AI access: Download backup / Download llms.txt." },
+  { group: "Pages and Trash (owner)", name: "Added pages", desc: "Write your own Markdown pages or keep pages an AI created and you accepted. Edit with preview, tables, version history and restore; import a .md file or download one. Saving refuses to overwrite a newer version.", how: "Sidebar: Added pages.", act: { label: "Open Added pages", to: { go: { kind: "pages" } } } },
+  { group: "Pages and Trash (owner)", name: "Trash", desc: "Deleted edits and pages stay in the Trash for 30 days and can be restored. Delete forever and Empty Trash ask twice; Undo appears after every removal. Deleted tokens cannot be restored.", how: "Sidebar: Trash.", act: { label: "Open Trash", to: { go: { kind: "trash" } } } },
+  { group: "AI space (owner)", name: "MCP address for AI tools", desc: "AI tools such as Gemini, Claude Code and Cursor read your documentation through one address and can only propose edits, never publish them.", how: "AI access: Test it and the connection snippets." },
   { group: "Reading", name: "Seven numbered chapters", desc: "The whole specification as seven chapters in the sidebar, numbered 1 to 7.", how: "Click a chapter, or press Ctrl+1 to Ctrl+7.", act: { label: "Open chapter 1", to: { go: { kind: "chapter", id: "overview" } } } },
   { group: "Reading", name: "Collapsible detail rows", desc: "Crates, prompts and the three core principles open and close in place. Your open/closed choices are remembered.", how: "Click a row title. Use Expand all / Collapse all above the lists.", act: { label: "Open the crates", to: { go: { kind: "chapter", id: "planes" } } } },
   { group: "Reading", name: "Outline rail", desc: "A small set of dashes on the left edge of a chapter. Hover it to see the chapter's sections; the current one is highlighted as you scroll.", how: "Hover or Tab to the dashes, then pick a section." },
@@ -62,6 +72,7 @@ export const FEATURES: Feature[] = [
 ];
 
 export const SHORTCUTS: { keys: string; what: string; where: string }[] = [
+  { keys: "j / k / a / r / v", what: "Next / previous edit, accept, reject, open the page (owner)", where: "Review inbox, with an edit focused" },
   { keys: "Ctrl+K", what: "Open search", where: "Anywhere" },
   { keys: "Ctrl+B", what: "Show or hide the sidebar", where: "Anywhere" },
   { keys: "Ctrl+1–7", what: "Jump to chapter 1 to 7", where: "Anywhere" },
@@ -108,6 +119,7 @@ export const LABS: { ref: PaneRef; name: string; desc: string }[] = [
 ];
 
 export const CHANGELOG: { v: string; date: string; items: string[] }[] = [
+  { v: "0.5.0", date: "2026-10-21", items: ["AI space: Review inbox with diffs, risk flags, page panel, undo and live updates.", "AI access: tokens you can edit, message for AI tools with history, activity log, checks, backup and llms.txt export.", "Trash with restore and 30-day clean-up; Added pages with import, download and tables.", "Safer MCP: per-address limits, hidden-text and injection-phrase checks."] },
   { v: "0.4.0", date: "2026-10-17", items: ["Works on React 18 (the Gemini Canvas version).", "Answer engine rebuilt: shows how a question was read, applies every filter and keyword, refuses items that do not exist, answers status, category, between-size, binary and full-prompt questions.", "All questions page, undo for deletes, restore archived questions, delete-all.", "Save warnings, tabs stay in sync, backup reminder.", "Spike tracker and Claims review page.", "Menus work with arrow keys, focus is kept, printing includes collapsed rows, new shortcuts (Alt+N, /).", "Optional smart matching (local model) for questions the rules cannot answer."] },
   { v: "0.3.0", date: "2026-10-17", items: ["Settings and app-docs page (Ctrl ,) with features, shortcuts, answer-engine guide, data tools, about and labs.", "Reading controls: text size, width, font. Display name.", "Log of questions the answer engine could not answer."] },
   { v: "0.2.0", date: "2026-10-17", items: ["Ask-the-spec answer engine with sources, follow-ups and answer detail.", "Notes, JSON backup and restore, Markdown export.", "Emergency HUD and Ring-0 labs. Small-screen layout."] },

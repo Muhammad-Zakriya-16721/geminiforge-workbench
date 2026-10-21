@@ -19,5 +19,15 @@ Live updates (Realtime), review inbox + side panel + highlight, Trash + retentio
 - **P8** CI (GitHub Actions: build, tsc, qa suites, mcp tests), Edge deploy from CI, backups to a private repo, monitoring, restructure R0 (docs/02).
 - **P9** features from docs/05, ordered by the owner.
 
-## Decisions still open (ask)
-1. Org roles: owner/admin/editor/viewer enough? 2. Can an org member see all projects or only invited ones? 3. Public sites per project (published reader URL)? 4. Keep Canvas single-file build alive? 5. Language(s) for UI (English only vs Urdu RTL)? 6. Which AI clients matter (Gemini app, Claude, Cursor, ChatGPT)?
+## Decisions (answered 2026-10-21)
+- Visibility: only signed-in users see documentation. Public pages are allowed only as optional **share links** the owner creates on purpose (one project or one document, with an optional expiry, revocable). NOTE: today the project `geminiforge` is `public`, the content bundle RPC is public and the MCP has anonymous read tools, so this is a change to build (see P5-V below), not the current behaviour.
+- Language: English only (no RTL/Urdu UI work; Urdu text in documents must still be allowed).
+- Roles (recommendation, based on documented models of Docmost: workspace Owner/Admin/Member + space Full access/Can edit/Can view; BookStack: stackable roles with per-item overrides): Organization: Owner, Admin, Member. Project: Manager (settings, members, tokens), Editor (edit + accept AI edits), Viewer (read). AI tokens are a separate kind of principal (read or propose, limited to ids/projects), never a member. You are the only user now, so build the tables and keep all rules inside `private.can_read_project` / `private.can_edit_project`; add a "Commenter" role only if you invite people who must not edit.
+- MFA and leaked-password protection are not available on the free plan (owner), so they are dropped from the to-do list.
+- Documentation (content) corrections happen after the whole app is finished (claims ledger A1-A13 waits).
+
+## P5-V Private-by-default build (new, from the answer above)
+1. Make `get_content_bundle` require a signed-in member (or a valid share link). 2. Sign-in screen as the first screen. 3. MCP: anonymous tools return nothing; every AI client uses a token (the Gemini path token already works). 4. `share_links` table (id, project/doc, expires_at, revoked_at, hashed secret) + read-only reader route `#/s/<secret>`. 5. Tests: anon gets nothing from every table/RPC/MCP tool; share link works until revoked. Confirm with the owner before switching, because the site stops working for signed-out visitors.
+
+## Decisions still open
+1. Does a member see all projects of an organization or only invited ones? (recommend: only invited, with Organization Admin seeing all). 2. Keep the Canvas single-file build? 3. Which AI clients matter (Gemini app tested; Claude Code/Cursor untested)?
