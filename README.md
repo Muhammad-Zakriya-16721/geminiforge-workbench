@@ -1,6 +1,6 @@
 # GeminiForge V20 Workbench
 
-A chat-style reader and plan keeper for the GeminiForge V20 specification. React 18 + TypeScript + Zustand, own CSS (dark only), no server needed.
+A chat-style reader and plan keeper for the GeminiForge V20 specification. React 18 + TypeScript + Zustand, own CSS (dark only). The full app also uses Supabase (Postgres, Auth, Realtime, Edge Function `docs-mcp`) and Vercel; the Canvas single-file build needs no server. Start with `docs/README.md` (index) and `docs/00-START-HERE-FOR-NEXT-AI.md`.
 
 ## How the code is organised
 - `parts/*.tsx` is the source of truth, concatenated in file-name order into `App.tsx` by `build.mjs` (so `App.tsx` is generated and git-ignored).

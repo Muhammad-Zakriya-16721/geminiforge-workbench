@@ -4,7 +4,7 @@ Rule: keys never go in chat, code or git. Storage: Supabase Edge Function secret
 
 | Priority | Integration | Use | Notes |
 |---|---|---|---|
-| 1 | OpenRouter (several keys as ONE secret `OPENROUTER_KEYS`, comma list) | ask-the-docs, summaries, "why this changed", draft step text | free models churn and are capped (~50/day without credit, third-party report, UNVERIFIED): discover models at runtime, never hard-code a `:free` id; verbatim quote check on every answer |
+| 1 | OpenRouter (5 keys as ONE secret `OPENROUTER_KEYS`; owner accepted the ToS risk of multi-account rotation, see docs/08 section C3; PINNED ordered model list, `openrouter/free` only as last fallback) | ask-the-docs, summaries, "why this changed", draft step text | free models churn and are capped (~50/day without credit, third-party report, UNVERIFIED): discover models at runtime, never hard-code a `:free` id; verbatim quote check on every answer |
 | 2 | GitHub REST/GraphQL (fine-grained token, repo-scoped) | link phases/steps to issues & PRs, push Markdown export to a repo, status badges | read-only first |
 | 3 | Supabase Storage | file attachments per project (PDF, images), signed URLs | RLS on storage.objects |
 | 4 | Resend / SMTP | digest of pending AI edits, token-expiry mails | one Edge Function, opt-in |
