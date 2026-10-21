@@ -5,6 +5,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # public values by design (the same two names are set in Vercel; data is protected by row level security); needed so the cloud screens exist in the test build
+      VITE_SUPABASE_URL: https://plbvgcnyfclillatpowc.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_6RuY0A4VTuxjHAAh9HVF0g_9ueL7nfF
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

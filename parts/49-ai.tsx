@@ -181,6 +181,7 @@ export function InboxView() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [peek, setPeek] = useState("");
   const [wide, setWide] = useState(false);
+  const narrow = useNarrow();
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   // "new since you last looked": the time of the previous visit is kept in this browser only
   const lastSeen = useRef(0);
@@ -313,7 +314,7 @@ export function InboxView() {
       {sets === null && !err && <p className="meta" role="status">Loading…</p>}
       {sets !== null && shown.length === 0 && <p className="meta">{filter === "pending" ? "Nothing is waiting for review." : "No edits to show."}</p>}
       <div className={peekRow ? "ai-split" : undefined} style={peekRow ? ({ "--peekw": wide ? "62%" : "42%" } as React.CSSProperties) : undefined}>
-      <div onKeyDown={onKey}>
+      <div onKeyDown={onKey} ref={inertRef(!!peekRow && narrow)}>
         {shown.map((s) => {
           const pend = s.doc_drafts.filter((d) => d.status === "pending");
           const low = pend.filter((d) => riskLevel(d.risk_score) === "low");

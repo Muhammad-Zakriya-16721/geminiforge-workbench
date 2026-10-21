@@ -34,6 +34,15 @@ const rpcCall = async (method, params = {}, opts) => {
 };
 const tool = (name, args, opts) => rpcCall("tools/call", { name, arguments: args }, opts).then((r) => r.result ?? r);
 
+// argument-validation failures are noted for the owner (only for token requests)
+seen.length = 0;
+await tool("search_docs", { query: 5 }, { path: `/functions/v1/docs-mcp/${TOKEN}` });
+const noted = seen.find((x) => x.fn === "mcp_note_failure");
+ok("wrong arguments with a token are noted in the activity log", !!noted && noted.args.p_tool === "search_docs" && noted.args.p_token === TOKEN && /./.test(noted.args.p_msg), JSON.stringify(noted?.args).slice(0, 120));
+seen.length = 0;
+await tool("search_docs", { query: 5 });
+ok("wrong arguments without a token write nothing", !seen.some((x) => x.fn === "mcp_note_failure"));
+
 // 1-2 tools/list
 let r = await rpcCall("tools/list");
 const names = r.result.tools.map((t) => t.name);

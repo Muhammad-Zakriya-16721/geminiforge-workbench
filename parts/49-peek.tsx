@@ -10,6 +10,14 @@ const PEEK_CSS = `
 @media (max-width:900px){.ai-split{display:block}.ai-peek{position:fixed;inset:0;z-index:60;max-height:none;border-radius:0}}
 `;
 
+// true below 900 px, where the page panel covers the whole screen and must behave like a modal dialog
+function useNarrow() {
+  const q = "(max-width: 900px)";
+  const [n, setN] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
+  useEffect(() => { const m = window.matchMedia(q); const f = () => setN(m.matches); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
+  return n;
+}
+
 // text of a Markdown-ish source without its markup, so it can be found in the rendered page
 const plainText = (t: string) => t.replace(/\*\*|`/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/^#{1,6}\s+/gm, "");
 
@@ -93,9 +101,19 @@ export function PeekPanel({ d, docTitle, wide, busy, onAccept, onReject, onWide,
   const show = useCallback(() => { if (box.current && passage) setMissed(!markPassage(box.current, passage)); }, [passage]);
   useEffect(() => { if (body !== null) { const t = setTimeout(show, 60); return () => clearTimeout(t); } }, [body, show]);
   useEffect(() => { closeBtn.current?.focus(); }, []);
-  const onKey = (e: React.KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+  const narrow = useNarrow();
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+    if (e.key === "Tab" && narrow && e.currentTarget instanceof HTMLElement) { // keep Tab inside the full-screen panel
+      const f = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled]),a[href],input,select,textarea,[tabindex='0']")];
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
   return (
-    <aside className="ai-peek" role="complementary" aria-label={`Page: ${title}`} onKeyDown={onKey}>
+    <aside className="ai-peek" role={narrow ? "dialog" : "complementary"} aria-modal={narrow ? true : undefined} aria-label={`Page: ${title}`} onKeyDown={onKey}>
       <div className="ai-peek-h">
         <b>{title}</b>
         {onAccept && <button type="button" className="btn btn-primary" disabled={busy} onClick={onAccept}>Accept</button>}

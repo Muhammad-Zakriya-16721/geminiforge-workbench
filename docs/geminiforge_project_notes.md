@@ -179,3 +179,6 @@ Owner hit their usage limit. Daily research task deleted. Wrote docs/00-07 (hand
 
 ## ROUND 19 (2026-10-21) Step 1 quick fixes
 Features page/changelog 0.5.0, toast hold (store.holdToast), checkbox 24px, beforeunload warning on unsaved page edits, CI runs qa-ai/qa-content/MCP tests, README fixed, docs/08 = single remaining list, docs/03 decisions (private docs + share links, English only, roles recommendation). Tests: qa-ai 92, qa-content 12, prodcheck 101 (one throttled-timing flake seen once, passes on rerun), mcp 31, Canvas build ok. Token revoked by owner. NOTE: project geminiforge is still `public` (content bundle RPC and anonymous MCP read are public) until P5-V is built.
+
+## ROUND 20 (2026-10-21) Step 1 completed
+CI failure found via GitHub API (qa-ai needed .env; CI build lacked VITE_SUPABASE_*) and fixed in ci.yml/qa-ai.mjs. Migration 0013 (advisory lock, derived_edit grant, mcp_note_failure) applied; Edge Function v6 logs argument-validation failures; phone page panel is a modal; docs/08 progress log updated. By hand (SQL editor): 0013_dashboard_only.sql. Lesson: `private.apply_draft` must remain executable by authenticated (decide_drafts is invoker); a grant inside a DO-test transaction is rolled back with it, re-check with has_function_privilege.

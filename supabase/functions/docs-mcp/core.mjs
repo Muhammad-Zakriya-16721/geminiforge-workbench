@@ -203,7 +203,19 @@ export function makeFetch({ rpc }) {
     if (!token && auth && /^Bearer dk_/.test(auth)) { const t = auth.slice(7).trim(); if (TOKEN_RE.test(t)) token = t; }
     const ip = await ipOf(req);
     const client = (req.headers.get("user-agent") || "").slice(0, 80) || null;
+    // a tool call with wrong arguments is refused by the SDK before any handler runs; keep the reason in the owner's activity log
+    let call = null;
+    if (token && req.method === "POST") { try { const j = JSON.parse(await req.clone().text()); if (j?.method === "tools/call") call = String(j.params?.name ?? "unknown"); } catch { /* not JSON: the SDK answers with its own error */ } }
     const res = await createMcpHandler(() => buildServer({ rpc, token, ip, client })).fetch(req);
+    if (call) {
+      try {
+        const txt = await res.clone().text();
+        const body = JSON.parse(txt.startsWith("event:") || txt.startsWith("data:") ? (txt.split("\n").find((l) => l.startsWith("data:")) ?? "").slice(5) : txt);
+        const first = body?.result?.isError ? String(body.result.content?.[0]?.text ?? "") : "";
+        const msg = body?.error ? String(body.error.message ?? "") : /^Input validation error/.test(first) ? first : "";
+        if (msg) await rpc("mcp_note_failure", { p_token: token, p_ip: ip, p_tool: call, p_msg: clean(msg) });
+      } catch { /* logging must never break the answer */ }
+    }
     const h = new Headers(res.headers); for (const [k, v] of Object.entries(CORS)) h.set(k, v);
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
   };
