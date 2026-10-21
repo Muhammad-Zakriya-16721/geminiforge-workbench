@@ -1,3 +1,5 @@
+**NOTE 2026-10-21 (owner rule D11, spend nothing): the paid parts of this report (Anthropic API, paid Gemini, any credit or deposit) are DROPPED. Free-only plan: docs/11 phase 7 and prompt Z1 in docs/12. The retrieval design, quote-verification algorithm, evaluation set, injection rules and cost-guard ideas below still apply.**
+
 # Research 2026-10-21: ask-the-docs (cheapest safe build) — feeds phase 7
 (1P) = first-party page fetched. Everything else third-party or UNVERIFIED. The fetch tool summarises pages with a small model, so confirm any number you rely on on the page itself.
 

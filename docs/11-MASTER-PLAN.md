@@ -3,13 +3,15 @@
 v1 written 2026-10-21 morning. **v2 rewritten 2026-10-21 after six sourced research passes** (docs/10, 13-18). `[x]` = done and tested, `[~]` = partly, `[ ]` = not started, `[?]` = waiting for the owner. Tags: **Q** = question for the owner (my recommendation given), **D** = decision made, **OWN** = only the owner can do it, **S/M/L** = effort (small: under a day, medium: 1-3 days, large: more), **(docs/N)** = where the evidence is. Facts marked UNVERIFIED in the research docs stay unverified here.
 Superseded by this file: docs/03-ROADMAP-NEXT.md, docs/ROADMAP.md. Older lists kept for reference: docs/05 (155 ideas), docs/08 (audit).
 
+> **Budget rule D11: 0 USD.** Anything in older docs that costs money (Anthropic/OpenAI/paid Gemini API, domain, Resend, Supabase/Vercel Pro, OpenRouter credit) is dropped or replaced by a free path.
+
 ## 0. State (v0.7.0)
 Live: https://geminiforge-workbench.vercel.app (auto-deploys from `main`). Supabase `plbvgcnyfclillatpowc` (free plan). Tests: qa-ai 152, qa-content 12, prodcheck 101, MCP offline 33, invitation email 9, SQL matrix. Phase 1 and 2 below are done.
 
 ## 1. What the research changed (read this first)
 1. **Supabase changes Data API grants on 2026-10-30 (9 days away).** New `public` tables will no longer be granted to anon/authenticated/service_role automatically; a migration that creates a table without explicit `GRANT` fails with 42501. Rule from now on: every new table migration contains its GRANTs and RLS in the same file. (docs/16)
 2. **Phase order changes.** Verify client compatibility (Claude Code, Cursor, claude.ai, Gemini app) BEFORE building OAuth; header tokens first, path tokens only for the Gemini app, read-only, 24 h by default. (docs/14)
-3. **Ask-the-docs: use Anthropic Haiku 5.5 with Citations (about 1-3 USD per month) + Postgres full-text search; do not rotate five free OpenRouter accounts** (terms 7(3), pointless). Remove the "5 keys rotation" line from docs/06. (docs/15)
+3. **Ask-the-docs must cost 0 (D11, owner 2026-10-21).** The paid Anthropic route from docs/15 is dropped. Free path first: your Google AI Pro Gemini app connected to our MCP (no API key), NotebookLM as a reading aid, and an extractive quote-finder built on Postgres full-text search (verbatim by construction, no model). An in-browser model or a free API tier is optional and decided by research prompt Z1. Key rotation across free accounts stays forbidden (terms). (docs/15, docs/12)
 4. **Editor: CodeMirror 6 (Markdown source + preview), not a WYSIWYG editor**; save with a version column and 3-way merge, not a CRDT. (docs/17)
 5. **Planning layer: rows are the source of truth, Markdown is rendered; progress is computed, never stored.** (docs/13)
 6. **New high-value items from the benchmark**: verified/owner/review-by pages, notification inbox, content-gap list, request-access, share-link hardening. (docs/18)
@@ -122,16 +124,15 @@ D1: only signed-in users see docs; public only through deliberate share links.
 - [ ] 6.13 S Per-project retention of activity and AI policy
 - DEFERRED: two-person approval; GitHub secret-scanning partner programme
 
-## PHASE 7: Ask-the-docs (docs/15)
-- [ ] 7.1 S Decide **Q8/Q14**: Anthropic prepaid with a 5 USD monthly cap in its own workspace (no free tier for private docs, no key rotation)
-- [ ] 7.2 S Key stored only as an Edge Function secret through the Supabase dashboard; rotate any key ever pasted in chat
-- [ ] 7.3 M Chunks by heading (h2/h3, ≤ 600 tokens, offsets stored) + FTS (generated tsvector, GIN, `websearch_to_tsquery`, heading weight A, `simple` config for Urdu — test)
-- [ ] 7.4 M One Edge Function: JWT + membership check, per-user (~30/day) and global (~300/day) limits in `ai_usage`, caps (question 500 chars, context ~6k tokens, max_tokens ~600), cache by hash(question, project, content version), no tools, retrieval under the caller's RLS
-- [ ] 7.5 M Verbatim quote check on every answer: NFC + whitespace/quote/dash normalisation, quote must be a contiguous substring of a retrieved chunk, 6-80 words, display text from our database by offsets, retry once, else "No verified answer"; plain-text rendering only, links only to our heading anchors; show the source next to each answer
-- [ ] 7.6 M 40-question golden set (24 single-page incl. 8 exact strings, 6 two-page, 4 paraphrases, 6 unanswerable, 2 injection) + metrics (recall@6, quote validity 100%, correctness ≥ 90%, refusals 6/6, false refusals ≤ 10%); re-run on every change
-- [ ] 7.7 S Trust boost: verified pages rank higher; cited quotes marked verified/unverified; option "verified documents only"
-- [ ] 7.8 S Gemini paid fallback behind the same function; pgvector only if recall@6 < ~90% (gte-small is English-only and truncates at 512 tokens)
-- Zero-cost reading aid: NotebookLM ("Gemini Notebook", 50 sources free) cannot be called from the app; Gemini app custom MCP app is US/English/personal-account only (docs/15)
+## PHASE 7: Ask-the-docs at zero cost (docs/15, constraint D11)
+- [ ] 7.1 S **Free path 1: Gemini app + our MCP.** Add our read-only MCP as a custom app in the Gemini app (works with your AI Pro account; US, English, personal Google account per Google's help page; confirm exact requirements with prompt R15). Ask questions there; our server only returns documents (no key, no cost). Edits still go through the Review inbox.
+- [ ] 7.2 S **Free path 2: NotebookLM ("Gemini Notebook")** as a personal reading aid: free 50 sources per notebook; merge pages into ≤ 50 files (export from the app). It cannot be called from our app.
+- [ ] 7.3 M **Extractive quote-finder (no model):** chunks by heading (h2/h3, ≤ 600 tokens, offsets stored) + Postgres FTS (generated tsvector, GIN, `websearch_to_tsquery`, heading weight A, `simple` config for Urdu — test); the answer is the best passages shown verbatim with a link to the heading. Always verbatim by construction; no API, no key, no cost.
+- [ ] 7.4 S Content-gap log: every question with no passage found, with a count (feeds the dashboard)
+- [ ] 7.5 M 40-question golden set (24 single-page incl. 8 exact strings, 6 two-page, 4 paraphrases, 6 unanswerable, 2 injection) + metrics (recall@6, correct refusals 6/6, false refusals ≤ 10%); re-run after every retrieval change
+- [ ] 7.6 S Trust boost: verified pages rank higher; mark results verified/unverified
+- [ ] 7.7 DECISION via prompt **Z1**: optional generative answers at 0 cost: (a) in-browser model (WebGPU; private; quality/Urdu/size unknown), (b) Gemini API free tier (limits unpublished, free-tier prompts may be used to improve Google products: only for non-private text or with your explicit consent), (c) OpenRouter `:free` models on ONE account (50 requests/day; some may train on inputs), (d) Cloudflare Workers AI free 10,000 neurons/day (terms unchecked). If any is chosen, keep: quote-then-verify substring check (NFC + whitespace/quote/dash normalisation, quote must be a contiguous substring of a retrieved chunk, 6-80 words, display text from our DB), no tools, plain-text rendering, per-user and global daily caps, key only as an Edge Function secret.
+- NOT used (costs money or breaks terms): Anthropic/OpenAI/paid Gemini, rotating several free accounts.
 
 ## PHASE 8: Reader and search
 - [ ] 8.1 M Stable block anchors + copy link; search filter chips (project, kind, verified, owner, labels); keyword search only until the 40-question set fails
@@ -150,10 +151,10 @@ D1: only signed-in users see docs; public only through deliberate share links.
 - [ ] 9.7 M pgTAP (`supabase test db`) next to the live DO-block matrix; axe in CI via @axe-core/playwright (wcag2a/aa, 21a/aa)
 - [ ] 9.8 S Monitoring: free uptime ping of the MCP address; errors logged to a small table (Vercel runtime logs last 1 hour on Hobby)
 - [ ] 9.9 M Migrate legacy anon/service_role JWT keys to `sb_publishable_`/`sb_secret_` before end of 2026 (pg_net/webhooks then need the secret key in the `apikey` header)
-- [ ] 9.10 S Hobby is non-commercial: no payments/ads/paid hosting (check phase 11 ideas); Pro (Supabase 25 USD, Vercel 20 USD) is the real fix for pausing/backups if the project grows
+- [ ] 9.10 S Hobby is non-commercial: no payments/ads/paid hosting (check phase 11 ideas). No paid plans (D11): pausing is handled by 9.2, backups by 9.3; if a free tier is ever withdrawn, plan the export-and-move (Markdown zip + SQL dump) instead of paying
 - [ ] 9.11 S Code-split the app (500 kB+ bundle warning), lazy-load labs and the answer engine
 - [ ] 9.12 S Decide the Canvas single-file build **Q4** (it has none of the cloud features)
-- [ ] 9.13 DEFERRED domain + Resend; restructure R0 (folder layout) after features settle
+- [ ] 9.13 DEFERRED restructure R0 (folder layout) after features settle. Domain + Resend DROPPED (costs money): email stays on the free Gmail path
 
 ## PHASE 10: Content corrections (after the app is finished, per owner)
 - [ ] 10.1 Decide claims A1-A13 in docs/claims_ledger.md (or "apply all suggested actions")
@@ -176,22 +177,22 @@ Limits: Gmail about 500/day (third-party figure); the app allows 20/hour and 60/
 - **Q4** Keep the Canvas single-file build? Freeze it.
 - **Q5** Which AI clients besides Gemini matter (Claude Code, Cursor, claude.ai, ChatGPT)? This decides token kinds and OAuth (6.1).
 - **Q6** Dark only? Yes (earlier decision).
-- **Q7** Email: Gmail app password now (recommended) or buy a domain first?
+- **Q7** Email: Gmail app password (free). A domain is out because of the $0 rule.
 - **Q8 (resolved by research)** No key rotation. Q14 below replaces it.
 - **Q9** Should this master plan become the first project in the app?
 - **Q10** Notifications only inside the app (recommended) or also a daily email?
 - **Q11 (recommend: skip)** Moving a project across organizations.
 - **Q12** Show people their pending invitations after sign-in? Yes.
 - **Q13** What does "Argon High" in your Gemini app refer to? Send a screenshot of the picker.
-- **Q14** Ask-the-docs: OK to open an Anthropic API account with a 5 USD monthly cap (about 1-3 USD/month expected)? Free tiers are not safe for private docs.
+- **Q14 (replaced)** Ask-the-docs at $0: OK to start with Gemini app + MCP, NotebookLM and the extractive quote-finder, and decide generative answers after prompt Z1?
 - **Q15** Turn on TOTP two-factor sign-in for your login (free per the docs, confirm in the dashboard)?
-- **Q16** OK to add a daily keep-alive ping so the free project does not pause? (Supabase states no policy against it; Pro is the alternative.)
+- **Q16** OK to add a daily keep-alive ping so the free project does not pause? (Supabase states no policy against it; paid plans are out.)
 - **Q17** Do you want "verified pages" (owner + review date + badge)? Recommended: yes, it is the most valuable gap found.
 - **Q18** Is a Markdown source editor with preview acceptable (not WYSIWYG)? Recommended; a block editor can come later.
 - **Q19** Backups to a private GitHub repo artifact store: OK? (no encryption at first)
 
 ## 15. Decisions already made (do not re-ask)
-D1 only signed-in users see docs, public only via share links. D2 English UI only (Urdu text inside documents stays possible). D3 invited-only access: members see only invited projects; org owners/admins see all. D4 Trash default: keep until deleted by hand, timer per project. D5 multiple projects are a main feature; everything editable. D6 content corrections after the app is finished. D7 secrets never in chat/code/git; keys enter through dashboards. D8 free Supabase plan (no leaked-password protection). D9 daily research task deleted. D10 start address opens the Organizations page.
+D1 only signed-in users see docs, public only via share links. D2 English UI only (Urdu text inside documents stays possible). D3 invited-only access: members see only invited projects; org owners/admins see all. D4 Trash default: keep until deleted by hand, timer per project. D5 multiple projects are a main feature; everything editable. D6 content corrections after the app is finished. D7 secrets never in chat/code/git; keys enter through dashboards. D8 free Supabase plan (no leaked-password protection). D9 daily research task deleted. D10 start address opens the Organizations page. **D11 (2026-10-21) spend nothing: free tiers only, no paid plans, APIs, domains or credits.**
 
 ## 16. Research map
 Done by Claude with sources: docs/10 (UI, email, Gemini, file hand-over), 13 (planning layer, decisions, health), 14 (MCP security, tokens, OAuth, review), 15 (ask-the-docs), 16 (Supabase/Vercel/GitHub limits, ops), 17 (editor, collaboration, offline, Markdown, import/export), 18 (workspace benchmark). Remaining Gemini deep-research prompts: docs/12 (status table at the top).
