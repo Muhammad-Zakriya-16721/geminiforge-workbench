@@ -28,3 +28,6 @@ D15 project-wide share shows all NON-restricted documents. D16 TOTP mandatory fo
 - UNVERIFIED: B2 sign-up without card (likely, phone number probably needed), personal-Gmail daily cap, `smtp.gmail.com:465`, exact auth/storage coverage of `supabase db dump`, whether a role other than `postgres` can dump RLS tables, mail-scanner behaviour.
 - Design: ops_keepalive table read by Vercel cron + GitHub schedule; nightly dump restored in the same job, `age`-encrypted, 14-day artifact + B2; Healthchecks + UptimeRobot; quarterly Neon exit drill. Report code bugs listed in docs/22 section 3.
 - Open owner questions: Q26 dedicated Gmail, Q27 B2 sign-up, Q28 two offline copies of the age key, Q29 Healthchecks/UptimeRobot accounts.
+
+## Research status
+Done and audited: A+B (docs/19), C (docs/21), E+F (docs/22). Prompts for the remaining four runs (5 D+G, 6 AI/MCP, 7 features, 8 UX/visual) are in docs/23.

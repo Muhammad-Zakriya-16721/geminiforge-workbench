@@ -22,3 +22,6 @@ Editor technology; master-file data model; private publishing and share links; a
 
 ## Update 2026-10-22 (newer facts win)
 Live: PostgreSQL 17.11, database 15 MB of 500 MB, 33 public tables (RLS on), 28 SECURITY DEFINER functions callable by signed-in users, none by anon. Repo is public on GitHub (may go private). Already on Vite 8, TypeScript 7, React 18.3.1; `sb_publishable_`/`sb_secret_` keys already in use. No `vercel.json` (no security headers/CSP yet); sign-in is email + password only (no MFA, no in-app account creation yet); CI has no secret scanning/Dependabot/CodeQL. Supabase Free has NO managed backups (verified). Supabase stops auto-granting new tables and functions on 2026-10-30. Decisions: Canvas single-file build dropped; custom dropdowns stay; share links are project-wide (read-only, expiring, revocable). Full details: the state-update document in the architecture file.
+
+## Research status (2026-10-22)
+Done and audited: A+B (stack and data), C (security and privacy), E+F (operations and email). Still to do: D+G (accessibility, offline, performance, testing), AI and MCP, feature discovery, UX and visual design. Audit files docs/19, 21, 22 correct earlier statements; where documents disagree, docs/20 (state update) and the audits win.
