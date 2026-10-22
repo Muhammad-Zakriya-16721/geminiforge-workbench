@@ -50,3 +50,4 @@ Done and audited: A+B (docs/19), C (docs/21), E+F (docs/22). Prompts for the rem
 - Research status: A+B, C, E+F, D+G, AI/MCP done; features and UX/visual remain (prompts in docs/23 and docs/prompts).
 
 - Correction (owner screenshot 2026-10-22): ChatGPT Plus has an "Add custom MCP server" dialog (Server URL or Tunnel; Authentication OAuth, plus No auth and a mixed option per the owner). The Run 6 claim that Plus is not eligible is wrong for this account. Untested against our server. Q39 open.
+- OpenAI custom MCP doc (verified): auth options OAuth, No authentication, OAuth-or-no-authentication; no header/API key option; write actions need confirmation unless readOnlyHint; first 512 characters of `instructions` should be self-contained (ours 444). ChatGPT therefore needs our path token (same as Gemini).

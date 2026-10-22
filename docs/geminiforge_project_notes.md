@@ -248,3 +248,6 @@ See docs/25-AUDIT-RESEARCH-AI-MCP.md (+ raw docs/25a). Verified: MCP 2026-07-28 
 
 ## ROUND 24k (2026-10-22) - ChatGPT Plus custom MCP
 Owner screenshot: ChatGPT Plus shows "Add custom MCP server" (Name, Description, Server URL or Tunnel, Authentication: OAuth, No auth, mixed per owner). Run 6 report claim (not eligible) is wrong for this account. Plan 6.1 updated; Q34 resolved; Q39 (list auth options, check data controls). Untested against our server; first try: path token with No auth, then header option if any.
+
+## ROUND 24l (2026-10-22) - OpenAI custom MCP doc
+Verified on developers.openai.com: ChatGPT auth = OAuth / No authentication / mixed; no header option; SSE + streaming HTTP; writes confirm unless readOnlyHint; instructions first 512 chars. Our instructions 444 chars. ChatGPT and Gemini both need the path token: keep read-only, 24 h, one per client. Untested.

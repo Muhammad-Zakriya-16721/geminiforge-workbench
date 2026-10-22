@@ -53,3 +53,6 @@ Raw report: `docs/25a-RESEARCH-AI-MCP-CHATGPT-RAW.md` (about 13,000 words). Verd
 - **Q36** Add the Origin check (spec MUST) knowing it blocks browser-based tools such as the web MCP Inspector unless allow-listed? Recommended: yes.
 - **Q37** Keep raw questions for 90 days (owner-only) for the content-gap list? Recommended: yes.
 - **Q38** Accept in writing that the Gemini app path sends retrieved document text to Google's consumer service (not a private API)? Recommended: yes, shown as a label next to the feature.
+
+## 6. Addendum (OpenAI doc, 2026-10-22)
+Primary page developers.openai.com/api/docs/guides/custom-mcp-server: ChatGPT (web) adds a custom MCP server by Server URL or Tunnel; authentication OAuth / No authentication / OAuth or no authentication; no API-key or header option; SSE and streaming HTTP; write actions need confirmation unless `readOnlyHint` is set; `search`/`fetch` not required; first 512 characters of `instructions` should be self-contained (ours: 444); workspace Lockdown applies; plan eligibility not listed (the owner's Plus account shows the dialog). Consequence: ChatGPT, like Gemini, can only use our path token, so path tokens must stay read-only, 24 h and one per client. Untested against our server (Q39).
