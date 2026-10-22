@@ -19,3 +19,6 @@ Zero cost (D11). English only (D2). Custom animated dropdowns stay (D13). Share 
 - Live site headers today: Vercel already sends HSTS (`max-age=63072000; includeSubDomains; preload`); no CSP, no Referrer-Policy; `/share` returns 404; static files send `access-control-allow-origin: *`. Vercel Hobby deployment protection covers preview/deployment URLs only, not the production domain.
 - Supabase Auth on Free: sessions never expire by default; time-box, inactivity timeout and single-session are Pro-only; passkeys are experimental; Turnstile/hCaptcha supported; TOTP MFA available; default SMTP is best-effort and rate limited.
 - Design decisions proposed in master plan v2.1 section 3: share links at `/share#secret` with a server proxy, invite-bound account creation, TOTP + AAL2 in sensitive RPCs, real CSP after moving inline CSS.
+
+## Owner decisions added 2026-10-22 (do not re-ask)
+D15 project-wide share shows all NON-restricted documents. D16 TOTP mandatory for owner, org admins and project managers. D17 the repo stays public; therefore never upload unencrypted data as workflow artifacts (any signed-in GitHub user can download artifacts; default retention 90 days). D18 Gmail will be Supabase Auth custom SMTP.
