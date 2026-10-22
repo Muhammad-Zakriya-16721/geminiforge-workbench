@@ -13,3 +13,9 @@
 
 ## Owner decisions (do not re-ask)
 Zero cost (D11). English only (D2). Custom animated dropdowns stay (D13). Share links are PROJECT-WIDE, read-only, expiring, revocable (D14). Markdown source editor with preview (CodeMirror 6), not WYSIWYG.
+
+## Added after the Part C audit (2026-10-22)
+- Full git history (53 commits) scanned: no secrets, no real email addresses, no zip/env/trace files; all commits authored "Claude <noreply@anthropic.com>".
+- Live site headers today: Vercel already sends HSTS (`max-age=63072000; includeSubDomains; preload`); no CSP, no Referrer-Policy; `/share` returns 404; static files send `access-control-allow-origin: *`. Vercel Hobby deployment protection covers preview/deployment URLs only, not the production domain.
+- Supabase Auth on Free: sessions never expire by default; time-box, inactivity timeout and single-session are Pro-only; passkeys are experimental; Turnstile/hCaptcha supported; TOTP MFA available; default SMTP is best-effort and rate limited.
+- Design decisions proposed in master plan v2.1 section 3: share links at `/share#secret` with a server proxy, invite-bound account creation, TOTP + AAL2 in sensitive RPCs, real CSP after moving inline CSS.
