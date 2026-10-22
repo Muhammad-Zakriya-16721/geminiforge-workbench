@@ -14,6 +14,6 @@ Raw report: `19a-RESEARCH-AB-CHATGPT-RAW.md` (14.6k words). Audited by Claude ag
 PG 17.11; DB size 15 MB of 500 MB (largest table 296 kB); unaccent available; 33 public tables all RLS on; 42 definer functions in public, 28 executable by authenticated (lint 0029), 0 by anon; 35 functions in private schema. anon has SELECT grant but no anon policy on workbench_state, app_admins, project_members (harmless, revoke for least privilege). Public anon reads (docs/doc_revisions/projects) go through private.can_read_project (built-in project is public by design).
 ## Owner decisions raised
 1. Canvas single-file build uses React 18; upgrading to 19 may break Canvas. Keep Canvas or drop it?
-2. Report says use native <select> for simple lists; owner asked for custom animated dropdowns. Keep custom?
+2. Report says use native `<select>` for simple lists; owner asked for custom animated dropdowns. Keep custom?
 3. Share link: document-only first (report recommends) or project-wide?
 ## Remaining research (see chat): functions default-privilege behaviour on 10-30 for new RPCs; Realtime 2026 pattern (broadcast-from-DB vs postgres_changes); API-schema/RPC-only architecture; revision retention (low priority).
