@@ -51,3 +51,10 @@ Done and audited: A+B (docs/19), C (docs/21), E+F (docs/22). Prompts for the rem
 
 - Correction (owner screenshot 2026-10-22): ChatGPT Plus has an "Add custom MCP server" dialog (Server URL or Tunnel; Authentication OAuth, plus No auth and a mixed option per the owner). The Run 6 claim that Plus is not eligible is wrong for this account. Untested against our server. Q39 open.
 - OpenAI custom MCP doc (verified): auth options OAuth, No authentication, OAuth-or-no-authentication; no header/API key option; write actions need confirmation unless readOnlyHint; first 512 characters of `instructions` should be self-contained (ours 444). ChatGPT therefore needs our path token (same as Gemini).
+
+## Added after the Run 7 (feature discovery) audit (2026-10-22; details docs/26)
+- Verified: Slab Free (10 users, verification + search, no card); Linear Free (unlimited members, 2 teams, 250 issues); Outline BSL 1.1; Material for MkDocs in maintenance mode since 2025-11-11 (Zensical successor); Turnstile Free (20 widgets, unlimited verifications; card requirement not stated); GitBook MCP + change requests; Guru duplicate detection; Notion Custom Agents credit-metered since 2026-05-04; docusaurus 3.10.2, starlight 0.42.6.
+- Wrong claim in the report: GitHub did NOT retire Markdown task lists; it retired tasklist blocks (2025-04-30) in favour of sub-issues.
+- Plan defects fixed: Section 12 had listed "visual-regression screenshots" and "backup encryption" as cut while 2.27 and 9.3 require them.
+- Plan changes: 4.2 no 25% doing mode; 3b.1 per-document interval and five derived states; 3b.5 after dashboard; 3b.6 duplicate detector; 4.5 six built-in templates with template_id/version; 5.8 export manifest layout and portability promise; 6.10 alert first; 9.19 acceptance tests; build order v2.2 (backups and keep-alive in weeks 1-2, planning core before sharing unless Q40 says otherwise). Product thesis added to the plan header.
+- Open: Q40 order, Q41 accept the 15 recommended "No" answers as D19. Research status: only Run 8 (UX and visual design) remains.

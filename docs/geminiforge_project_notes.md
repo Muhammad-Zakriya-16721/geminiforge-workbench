@@ -251,3 +251,6 @@ Owner screenshot: ChatGPT Plus shows "Add custom MCP server" (Name, Description,
 
 ## ROUND 24l (2026-10-22) - OpenAI custom MCP doc
 Verified on developers.openai.com: ChatGPT auth = OAuth / No authentication / mixed; no header option; SSE + streaming HTTP; writes confirm unless readOnlyHint; instructions first 512 chars. Our instructions 444 chars. ChatGPT and Gemini both need the path token: keep read-only, 24 h, one per client. Untested.
+
+## ROUND 24m (2026-10-22) - Run 7 (feature discovery) audited
+See docs/26-AUDIT-RESEARCH-FEATURES.md (+ raw docs/26a; appendices: 25 templates, 40 acceptance tests). Report complete (42 products, 186 features, 25 templates, 15 questions) but 75% of catalog = already in plan, 13 NEW; top-40 and first-release-15 are groups. Verified market facts (Slab, Linear, Outline BSL, Material MkDocs maintenance mode, Turnstile free, GitBook MCP change requests, Guru duplicates, Notion credits). Wrong: GitHub retired tasklist blocks, not Markdown task lists. Found: plan Section 12 contradicted 2.27 and 9.3 (fixed). Report roadmap put backups in Mar-Apr: moved to weeks 1-2 (build order v2.2). Plan: 4.2, 3b.1, 3b.5, 3b.6, 4.5, 5.8, 6.10, new 9.19, product thesis, Q40-Q41. Run 8 prompt updated; Run 7 prompt removed (done).
