@@ -224,3 +224,9 @@ Open owner actions: second-account invitation test; add GMAIL_USER/GMAIL_APP_PAS
 
 ## ROUND 24d (2026-10-22) - ChatGPT A+B report audited
 See docs/19-AUDIT-RESEARCH-AB.md (+ raw report docs/19a-...). Key: report strong; wrong on Free backups (none) and some versions; missed functions default privileges, our repo already on Vite 8/keys migrated; live DB 15 MB, PG 17.11, 28 definer fns flagged, 0 anon. Do first: opt-in default-privilege SQL (tables+functions+sequences) before 2026-10-30.
+
+## ROUND 24e (2026-10-22) - Owner decisions
+1. Canvas single-file build DROPPED (no longer needed) -> React 19 upgrade unblocked; canvas/ stubs, build-final.mjs, vite.final.config.ts, final/ can be deleted.
+2. Keep custom animated dropdowns (not native select).
+3. Share links are PROJECT-WIDE (report advised document-only; owner chose project-wide). Mitigation to build: read-only, default expiry, revocable, listed in UI, hashed secret in #/s/<secret>, exclude review inbox/trash/members/tokens/audit from the public projection.
+Next (proposed): migration 0017 for Oct-30 default privileges (tables+sequences+functions), revoke anon SELECT on workbench_state/app_admins/project_members, 28-definer ledger; then drop Canvas + React 19.3.1; then planning layer, share links, CM6 editor.
