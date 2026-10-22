@@ -221,3 +221,6 @@ Open owner actions: second-account invitation test; add GMAIL_USER/GMAIL_APP_PAS
 - Owner has ChatGPT Plus (no new cost). Gemini Deep Research kept freezing at the report-writing step (3 runs). Plan: run research in ChatGPT in smaller combined runs; first run = Parts A+B combined, no word limit, prompt written with live-state facts inside (33 public tables, 5 live migrations, 28 definer functions flagged by advisor, leaked-password protection off, pg_trgm/pgtap not installed).
 - ChatGPT Work (launched 2026-07-09 per third-party guides; UNVERIFIED at OpenAI primary pages, help.openai.com returns 403 to the sandbox): Deep Research reportedly available inside Work via the + menu, uses the Work/Codex allowance (separate from Chat), asks clarifying questions instead of an editable plan. Owner must check the + menu to confirm.
 - Plus Deep Research count: OpenAI publishes no fixed number; read the in-app counter. File uploads: 80 files/3 h (OpenAI file FAQ).
+
+## ROUND 24d (2026-10-22) - ChatGPT A+B report audited
+See docs/19-AUDIT-RESEARCH-AB.md (+ raw report docs/19a-...). Key: report strong; wrong on Free backups (none) and some versions; missed functions default privileges, our repo already on Vite 8/keys migrated; live DB 15 MB, PG 17.11, 28 definer fns flagged, 0 anon. Do first: opt-in default-privilege SQL (tables+functions+sequences) before 2026-10-30.
