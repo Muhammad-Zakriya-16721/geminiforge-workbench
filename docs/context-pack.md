@@ -26,3 +26,4 @@ Live: PostgreSQL 17.11, database 15 MB of 500 MB, 33 public tables (RLS on), 28 
 ## Research status (2026-10-22)
 Done and audited: A+B (stack and data), C (security and privacy), E+F (operations and email). Still to do: D+G (accessibility, offline, performance, testing), AI and MCP, feature discovery, UX and visual design. Audit files docs/19, 21, 22 correct earlier statements; where documents disagree, docs/20 (state update) and the audits win.
 Update: D+G (accessibility, offline, performance, testing) is also done and audited (docs/24). Our TypeScript is 7.0.2, so typescript-eslint cannot be used; lint = Oxlint + tsc.
+Update: the AI and MCP research is also done and audited (docs/25). Primary in-app Q&A = extractive passage finder with exact quote verification; Gemini app + our MCP = secondary, owner-accepted consumer-cloud path. Remaining research: feature discovery, UX and visual design.
