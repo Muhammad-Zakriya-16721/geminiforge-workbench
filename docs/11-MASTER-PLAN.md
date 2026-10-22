@@ -1,26 +1,29 @@
-# MASTER PLAN v2: GeminiForge documentation workspace (living document)
+# MASTER PLAN v2.1: GeminiForge documentation workspace (living document)
 
 v1 written 2026-10-21 morning. **v2 rewritten 2026-10-21 after six sourced research passes** (docs/10, 13-18). `[x]` = done and tested, `[~]` = partly, `[ ]` = not started, `[?]` = waiting for the owner. Tags: **Q** = question for the owner (my recommendation given), **D** = decision made, **OWN** = only the owner can do it, **S/M/L** = effort (small: under a day, medium: 1-3 days, large: more), **(docs/N)** = where the evidence is. Facts marked UNVERIFIED in the research docs stay unverified here.
 Superseded by this file: docs/03-ROADMAP-NEXT.md, docs/ROADMAP.md. Older lists kept for reference: docs/05 (155 ideas), docs/08 (audit).
 
+> **v2.1 (2026-10-22):** audit of the ChatGPT Parts A+B research added (docs/19) and owner decisions D12 (Canvas build dropped), D13 (custom dropdowns stay), D14 (share links are project-wide).
+
 > **Budget rule D11: 0 USD.** Anything in older docs that costs money (Anthropic/OpenAI/paid Gemini API, domain, Resend, Supabase/Vercel Pro, OpenRouter credit) is dropped or replaced by a free path.
 
 ## 0. State (v0.7.0)
-Live: https://geminiforge-workbench.vercel.app (auto-deploys from `main`). Supabase `plbvgcnyfclillatpowc` (free plan). Tests: qa-ai 152, qa-content 12, prodcheck 101, MCP offline 33, invitation email 9, SQL matrix. Phase 1 and 2 below are done.
+Live: https://geminiforge-workbench.vercel.app (auto-deploys from `main`). Supabase `plbvgcnyfclillatpowc` (free plan). Tests: qa-ai 152, qa-content 12, prodcheck 101, MCP offline 33, invitation email 9, SQL matrix. Phase 1 and 2 below are done. Checked 2026-10-22: Postgres 17.11, database 15 MB of 500 MB, repo already on Vite 8.3.4 / TypeScript 7.0.2 / React 18.3.1, browser + invite + MCP already use `sb_publishable_`/`sb_secret_` keys.
 
 ## 1. What the research changed (read this first)
-1. **Supabase changes Data API grants on 2026-10-30 (9 days away).** New `public` tables will no longer be granted to anon/authenticated/service_role automatically; a migration that creates a table without explicit `GRANT` fails with 42501. Rule from now on: every new table migration contains its GRANTs and RLS in the same file. (docs/16)
+1. **Supabase changes Data API grants on 2026-10-30 (8 days away on 2026-10-22).** New `public` tables will no longer be granted to anon/authenticated/service_role automatically; a migration that creates a table without explicit `GRANT` fails with 42501. Rule from now on: every new table migration contains its GRANTs and RLS in the same file. **Functions too**: Supabase's "Securing your API" page says new functions in `public` are also moving to opt-in (`grant execute` explicitly); what exactly happens to new functions on 10-30 is UNVERIFIED, so grant explicitly either way. (docs/16, docs/19)
 2. **Phase order changes.** Verify client compatibility (Claude Code, Cursor, claude.ai, Gemini app) BEFORE building OAuth; header tokens first, path tokens only for the Gemini app, read-only, 24 h by default. (docs/14)
 3. **Ask-the-docs must cost 0 (D11, owner 2026-10-21).** The paid Anthropic route from docs/15 is dropped. Free path first: your Google AI Pro Gemini app connected to our MCP (no API key), NotebookLM as a reading aid, and an extractive quote-finder built on Postgres full-text search (verbatim by construction, no model). An in-browser model or a free API tier is optional and decided by research prompt Z1. Key rotation across free accounts stays forbidden (terms). (docs/15, docs/12)
 4. **Editor: CodeMirror 6 (Markdown source + preview), not a WYSIWYG editor**; save with a version column and 3-way merge, not a CRDT. (docs/17)
 5. **Planning layer: rows are the source of truth, Markdown is rendered; progress is computed, never stored.** (docs/13)
 6. **New high-value items from the benchmark**: verified/owner/review-by pages, notification inbox, content-gap list, request-access, share-link hardening. (docs/18)
-7. **Survival items on the free plan**: backups do not exist unless we build them; the project pauses after 7 days of no user database activity (in-database cron may not count); Hobby cron runs once per day. (docs/16)
+7. **Survival items on the free plan**: backups do not exist unless we build them (re-verified 2026-10-22 on Supabase's backup page: daily backups only on Pro/Team/Enterprise; a ChatGPT audit claiming otherwise was wrong, docs/19); the project pauses after 7 days of no user database activity (in-database cron may not count); Hobby cron runs once per day. (docs/16)
 8. **Corrected assumption**: TOTP two-factor sign-in is free on all Supabase plans (only phone MFA is paid; leaked-password protection is Pro). Earlier notes said "no MFA on free": **Q15**, confirm in the dashboard.
 9. **Cut or defer** a long list for a solo owner (section 12).
+10. **Audit of the ChatGPT Parts A+B report (docs/19, 2026-10-22):** keep CodeMirror 6, Zustand, hash routing, adjacency list, Postgres full-text search; upgrade to React 19.3.1 after the grants work; do the 10-30 migration first; classify the 28 `SECURITY DEFINER` functions; share links use a `#/s/<secret>` fragment with a hashed secret; native `<dialog>` for true modals; no Biome/Rolldown/Tailwind/ltree/vector.
 
 ## PHASE 1: Foundations (DONE)
-- [x] 1.1 Reader app, answer engine, notes, backups, labs, Canvas single-file build
+- [x] 1.1 Reader app, answer engine, notes, backups, labs, Canvas single-file build (DROPPED 2026-10-22, D12)
 - [x] 1.2 Supabase sync, runtime content bundle, Realtime live updates
 - [x] 1.3 MCP server (Edge Function `docs-mcp`), tokens, audit log, kill switch, Gemini path token tested
 - [x] 1.4 AI space: Review inbox, diffs, risk flags, side panel, undo; Trash with timer (default: keep until deleted by hand)
@@ -48,6 +51,7 @@ Live: https://geminiforge-workbench.vercel.app (auto-deploys from `main`). Supab
   - [ ] 2.17 S Resend / re-create an invitation from the Invitations tab
   - [ ] 2.18 S Invitee sees pending invitations after sign-in **Q12**
   - [ ] 2.19 S Breadcrumb "…" overflow menu for hidden middle crumbs
+  - [ ] 2.20 S Native `<dialog>` + `showModal()` for true modals (top layer, inert background, less home-made code); keep our custom select/menu/combobox (D13); Popover only where it removes light-dismiss code; keep tests for Tab, Escape, Enter, Space, arrows and focus return (docs/19)
   - [ ] 2.20 S Palette: highlight matched letters, recent searches, Ctrl+Enter new tab
   - [ ] 2.21 S Favourites (table user+doc) at the top of lists; recents stay in localStorage (docs/18 #11)
   - [ ] 2.22 S Display name per person (lists show emails today)
@@ -62,12 +66,12 @@ Live: https://geminiforge-workbench.vercel.app (auto-deploys from `main`). Supab
 
 ## PHASE 3: Private by default and sharing (P5-V) — do before any new table work
 D1: only signed-in users see docs; public only through deliberate share links.
-- [ ] 3.0 S **Grants rule** for every new table: GRANT in the same migration, nothing to `anon` on private tables; matrix asserts `has_table_privilege('anon', t, 'select')` is false and `has_function_privilege('anon', f, 'execute')` is false (docs/16). Lands before 2026-10-30.
+- [ ] 3.0 S **Grants rule + 10-30 migration (do first, this week)**: opt in now with `alter default privileges for role postgres in schema public revoke select,insert,update,delete on tables from anon,authenticated,service_role;` + the same for functions (`revoke execute`, also `from public`) and sequences (`revoke usage,select`); every new table AND function gets explicit GRANT/EXECUTE + RLS + policies + indexes in the same migration; revoke the unneeded anon SELECT on `workbench_state`, `app_admins`, `project_members`; the matrix asserts `has_table_privilege('anon', t, 'select')` and `has_function_privilege('anon', f, 'execute')` are false on private objects. Also: classify the 28 `SECURITY DEFINER` functions (keep / switch to invoker / revoke / move to `private`), set `search_path=''`, qualify `extensions.digest`. Lands before 2026-10-30 (docs/16, docs/19).
 - [ ] 3.1 M `get_content_bundle` requires a signed-in member (or a valid share link)
 - [ ] 3.2 S Sign-in as the first screen (the start page already shows a card; the spec is still reachable by address until this step)
 - [ ] 3.3 M MCP: anonymous tools return nothing; every AI client uses a token
 - [ ] 3.4 S Project `geminiforge` set to `private`; check every table, RPC and MCP tool as `anon` (RLS behaviour AND grants)
-- [ ] 3.5 M `share_links` (project or document, expiry, revoked, hashed secret, constant-time compare, rate-limited lookup RPC, expiry enforced in the RPC) + route `#/s/<secret>`; `noindex`, `Referrer-Policy: no-referrer` on that route only; payload contains NO editor ids or emails (Notion leak, docs/18); view count + last viewed per link
+- [ ] 3.5 M `share_links` (**project-wide per D14**, document-level also allowed; read-only; default expiry; revoked; listed in the UI; 256-bit secret in the URL fragment, only SHA-256 stored, redemption RPC hashes with `extensions.digest`; loading the page never consumes or changes anything; constant-time compare, rate-limited lookup RPC, expiry enforced in the RPC; the public projection EXCLUDES review inbox, drafts, Trash, members, tokens, audit, comments) + route `#/s/<secret>`; `noindex`, `Referrer-Policy: no-referrer` on that route only; payload contains NO editor ids or emails (Notion leak, docs/18); view count + last viewed per link
 - [ ] 3.6 S Who may make a project public/unlisted: only organization owners/admins **Q1**
 - [ ] 3.7 M Tests: anon gets nothing; share link works until revoked or expired; drafts, Trash, exports, search and comments are not readable by outsiders (BookStack lesson, docs/18)
 - [ ] 3.8 S RLS rules: `(select auth.uid())`, `to authenticated` on every policy, index every policy column, no `user_metadata`, `security_invoker` views; run advisors after each migration and fail CI on ERROR (docs/16)
@@ -75,9 +79,9 @@ D1: only signed-in users see docs; public only through deliberate share links.
 - Research: docs/16 (limits, grants), docs/18 (share-link risks)
 
 ## PHASE 3b: Trust and health (new, from the benchmark)
-- [ ] 3b.1 M **Verified pages**: owner_id, verified_by, verified_at, verified_until, review_every_days, reviewed_rev; badge, filter, "changed since verified" diff; an AI-accepted edit does NOT renew the review; any later edit flips to "changed since verified"; no bare "still accurate" button (docs/13, docs/18 #1)
+- [ ] 3b.1 M **Verified pages**: owner_id, verified_by, verified_at, verified_until, review_every_days, reviewed_rev; badge, filter, "changed since verified" diff; an AI-accepted edit does NOT renew the review; **AUDIT CHANGE (docs/19)**: store verification as immutable events `doc_verifications(doc_id, rev, verified_by, verified_at, review_after, note)` tied to our `doc_revisions.rev` and derive the state (unverified / changed since verified / review due / verified), no mutable flag; any later edit flips to "changed since verified"; no bare "still accurate" button (docs/13, docs/18 #1)
 - [ ] 3b.2 M **Notifications** table (AI edit waiting, verification due, mention, role change, request access) over Realtime; the bell shows it; no email digest (Q10)
-- [ ] 3b.3 S Daily job (pg_cron) flips expired verifications and inserts notifications (max 8 jobs, each under 10 minutes)
+- [ ] 3b.3 S Daily job (pg_cron) only inserts reminder notifications (expiry is derived from `review_after < current_date`, never flipped) (max 8 jobs, each under 10 minutes)
 - [ ] 3b.4 S **Request access** button + a `restricted` boolean per document (editors/managers only) instead of full per-page permissions
 - [ ] 3b.5 S Page views: `doc_view_daily(doc_id, day, count)` upsert RPC (no per-view rows); 30-day views, last viewed, "unread 90 days" staleness signal
 - [ ] 3b.6 S In-app link check on save (`doc_links`: broken links, orphans, duplicate titles); markdownlint warnings only (MD001, MD024, MD051-053)
@@ -86,7 +90,7 @@ D1: only signed-in users see docs; public only through deliberate share links.
 - [ ] 3b.9 S Content-gap list: log every question with no verbatim quote found, with a count; top ten on the dashboard (after phase 7)
 
 ## PHASE 4: Core product: master file, phases, steps, decisions (design in docs/13)
-- [ ] 4.1 M Tables `plan_nodes` (adjacency list `parent_id`, `kind` phase|step, depth ≤ 4, fractional `position` text COLLATE "C", status todo|doing|done|blocked|cancelled|deferred, weight int default 1, rev, `on delete restrict`), `plan_edges` (blocked_by, cycle-rejecting trigger), `decisions` (MADR fields, never renumbered), `decision_links`; RLS inherits from `project_id`; GRANTs in the same migration (3.0)
+- [ ] 4.1 M Tables `plan_nodes` (adjacency list `parent_id`, `kind` phase|step, depth ≤ 4, fractional `position` text COLLATE "C", status todo|doing|done|blocked|cancelled|deferred, weight int default 1, rev, `on delete restrict`), `plan_edges` (blocked_by, cycle-rejecting trigger), `decisions` (MADR fields, never renumbered), `decision_links`; RLS inherits from `project_id` via our existing `private.can_read_project/can_edit_project`; GRANTs in the same migration (3.0). **AUDIT CHANGE (docs/19, Q20)**: prefer integer gap `order_key` (our `docs.position` is already integer) over fractional text (keep `COLLATE "C"` only if fractional stays); drop weights in v1 (equal leaf steps); do not put a plain unique index on the order key (reorders hit transient duplicates: deferrable constraint or two-step renumber); depth trigger as in the report
 - [ ] 4.2 M Progress as a SQL view/RPC, never stored: only leaf steps count; cancelled/deferred leave the denominator; blocked stays and shows a red count with its reason; `doing` counts 0 (optional 25% toggle); empty container shows "no steps"; round down so 99.6% never shows 100%; show n/m, "+N steps added" (baseline when a phase starts), next step
 - [ ] 4.3 M Master file view: auto-index of phases with progress; phase view with steps/sub-steps and check marks; dependencies ("waiting on D-0012")
 - [ ] 4.4 M Decision log (MADR 4.0): proposed > accepted > deprecated | superseded | rejected; accepted records change only status and supersession; `[[D-0012]]` links; accepting offers to unblock linked steps; `review-by` feeds the stale list
@@ -97,7 +101,7 @@ D1: only signed-in users see docs; public only through deliberate share links.
 - [ ] 4.9 S Q9 decide whether this master plan becomes the first project (template)
 
 ## PHASE 5: Editor: owner edits everything (docs/17)
-- [ ] 5.1 M **CodeMirror 6** Markdown editor with `react-markdown` preview (split or toggle); front matter via `remark-frontmatter`; math (KaTeX) and Mermaid lazy-loaded; sanitize after the last unsafe step; fix-up for `user-content-` id prefix in block anchors
+- [ ] 5.1 M **CodeMirror 6** Markdown editor with `react-markdown` preview (split or toggle); front matter via `remark-frontmatter`; math (KaTeX) and Mermaid lazy-loaded; sanitize after the last unsafe step; rules (docs/19): no raw HTML, never `dangerouslySetInnerHTML`, URL scheme allowlist, no remote images in the Review inbox, render search snippets as text with our own `<mark>`, Mermaid DEFERRED, KaTeX only after a sanitizer test; fix-up for `user-content-` id prefix in block anchors
 - [ ] 5.2 M Save with a `version` column (`update … where version = base`); on conflict 3-way merge (`node-diff3`), remaining conflicts shown as a diff; keep BOTH versions on conflict; Supabase Presence only for a soft "X is editing" banner; no offline writes in v1
 - [ ] 5.3 L Edit generated spec pages and chapters; migrate derived spec documents to native documents (docs/01 step 6)
 - [ ] 5.4 M Add / remove / move / rename chapters and sections; drag-and-drop order (fractional keys)
@@ -150,10 +154,11 @@ D1: only signed-in users see docs; public only through deliberate share links.
 - [ ] 9.6 S Edge Function + migrations deployed from CI (scoped token, `supabase/setup-cli`, `db push --dry-run` first)
 - [ ] 9.7 M pgTAP (`supabase test db`) next to the live DO-block matrix; axe in CI via @axe-core/playwright (wcag2a/aa, 21a/aa)
 - [ ] 9.8 S Monitoring: free uptime ping of the MCP address; errors logged to a small table (Vercel runtime logs last 1 hour on Hobby)
-- [ ] 9.9 M Migrate legacy anon/service_role JWT keys to `sb_publishable_`/`sb_secret_` before end of 2026 (pg_net/webhooks then need the secret key in the `apikey` header)
+- [ ] 9.9 S Legacy keys: browser, invite function and MCP already use `sb_publishable_`/`sb_secret_` (MCP still falls back to the legacy variable). Remaining: confirm in the dashboard, disable the legacy keys, remove the fallback, check `pg_net`/webhooks (secret key in the `apikey` header), audit Auth JWT signing keys (not the same project as API keys)
 - [ ] 9.10 S Hobby is non-commercial: no payments/ads/paid hosting (check phase 11 ideas). No paid plans (D11): pausing is handled by 9.2, backups by 9.3; if a free tier is ever withdrawn, plan the export-and-move (Markdown zip + SQL dump) instead of paying
 - [ ] 9.11 S Code-split the app (500 kB+ bundle warning), lazy-load labs and the answer engine
-- [ ] 9.12 S Decide the Canvas single-file build **Q4** (it has none of the cloud features)
+- [ ] 9.12 S **Canvas single-file build dropped (D12)**: tag the repo, then delete `canvas/`, `build-final.mjs`, `vite.final.config.ts`, `final/`, `index.final.html`, `App.final.tsx`, `main.final.tsx` and the Canvas tests
+- [ ] 9.14 S React 19.3.1 (18.3.1 already in use as the stepping stone) + Vite 8.3.5; full Playwright suite green; NO React Compiler in the same change; View Transitions optional later
 - [ ] 9.13 DEFERRED restructure R0 (folder layout) after features settle. Domain + Resend DROPPED (costs money): email stays on the free Gmail path
 
 ## PHASE 10: Content corrections (after the app is finished, per owner)
@@ -174,7 +179,7 @@ Limits: Gmail about 500/day (third-party figure); the app allows 20/hour and 60/
 - **Q1** Who may make a project public/unlisted? Only organization owners/admins.
 - **Q2** May any signed-in user create an organization? No, only you for now.
 - **Q3** When do we switch to "only signed-in users see docs"? Right after the first real two-account invitation test; note 3.0 (grants) lands before 2026-10-30 regardless.
-- **Q4** Keep the Canvas single-file build? Freeze it.
+- **Q4 (resolved, D12)** Canvas single-file build dropped.
 - **Q5** Which AI clients besides Gemini matter (Claude Code, Cursor, claude.ai, ChatGPT)? This decides token kinds and OAuth (6.1).
 - **Q6** Dark only? Yes (earlier decision).
 - **Q7** Email: Gmail app password (free). A domain is out because of the $0 rule.
@@ -189,10 +194,13 @@ Limits: Gmail about 500/day (third-party figure); the app allows 20/hour and 60/
 - **Q16** OK to add a daily keep-alive ping so the free project does not pause? (Supabase states no policy against it; paid plans are out.)
 - **Q17** Do you want "verified pages" (owner + review date + badge)? Recommended: yes, it is the most valuable gap found.
 - **Q18** Is a Markdown source editor with preview acceptable (not WYSIWYG)? Recommended; a block editor can come later.
+- **Q20** Planning order key: integer gaps and equal-weight steps (recommended by the audit) instead of fractional text and weights?
+- **Q21** Minimum browser baseline: current and previous major of Chrome, Edge, Firefox, Safari incl. iOS (recommended; makes the native-dialog/CSS plan simple)?
 - **Q19** Backups to a private GitHub repo artifact store: OK? (no encryption at first)
 
 ## 15. Decisions already made (do not re-ask)
-D1 only signed-in users see docs, public only via share links. D2 **ENGLISH ONLY, ALWAYS** (UI, documents, prompts, research; owner said this repeatedly). D3 invited-only access: members see only invited projects; org owners/admins see all. D4 Trash default: keep until deleted by hand, timer per project. D5 multiple projects are a main feature; everything editable. D6 content corrections after the app is finished. D7 secrets never in chat/code/git; keys enter through dashboards. D8 free Supabase plan (no leaked-password protection). D9 daily research task deleted. D10 start address opens the Organizations page. **D11 (2026-10-21) spend nothing: free tiers only, no paid plans, APIs, domains or credits.**
+D1 only signed-in users see docs, public only via share links. D2 **ENGLISH ONLY, ALWAYS** (UI, documents, prompts, research; owner said this repeatedly). D3 invited-only access: members see only invited projects; org owners/admins see all. D4 Trash default: keep until deleted by hand, timer per project. D5 multiple projects are a main feature; everything editable. D6 content corrections after the app is finished. D7 secrets never in chat/code/git; keys enter through dashboards. D8 free Supabase plan (no leaked-password protection). D9 daily research task deleted. D10 start address opens the Organizations page. **D11 (2026-10-21) spend nothing: free tiers only, no paid plans, APIs, domains or credits.** **D12 (2026-10-22) the Canvas single-file build is dropped.** **D13 (2026-10-22) keep our custom animated dropdowns (not native select).** **D14 (2026-10-22) share links are project-wide (read-only, expiring, revocable).**
 
 ## 16. Research map
 Done by Claude with sources: docs/10 (UI, email, Gemini, file hand-over), 13 (planning layer, decisions, health), 14 (MCP security, tokens, OAuth, review), 15 (ask-the-docs), 16 (Supabase/Vercel/GitHub limits, ops), 17 (editor, collaboration, offline, Markdown, import/export), 18 (workspace benchmark). Four big Gemini deep-research runs (technical foundations, AI-native docs, feature discovery, UX/visual design): docs/12. Their reports will be merged into this plan as docs/19-RESEARCH-RUN1..4.
+Also docs/19 (audit of the ChatGPT Parts A+B report, 2026-10-22; raw report docs/19a): corrections and live facts.
