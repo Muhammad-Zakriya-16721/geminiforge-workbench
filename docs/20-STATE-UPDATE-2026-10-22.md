@@ -48,3 +48,5 @@ Done and audited: A+B (docs/19), C (docs/21), E+F (docs/22). Prompts for the rem
 - Master plan bug fixed: the golden set summed to 42; fixed at 40 (22+6+4+6+2).
 - Open: Q34 ChatGPT Plus developer-mode check, Q35 Claude Free test host, Q36 Origin check, Q37 question retention, Q38 consumer-cloud label.
 - Research status: A+B, C, E+F, D+G, AI/MCP done; features and UX/visual remain (prompts in docs/23 and docs/prompts).
+
+- Correction (owner screenshot 2026-10-22): ChatGPT Plus has an "Add custom MCP server" dialog (Server URL or Tunnel; Authentication OAuth, plus No auth and a mixed option per the owner). The Run 6 claim that Plus is not eligible is wrong for this account. Untested against our server. Q39 open.
