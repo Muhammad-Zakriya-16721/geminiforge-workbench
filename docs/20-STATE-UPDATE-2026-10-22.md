@@ -31,3 +31,10 @@ D15 project-wide share shows all NON-restricted documents. D16 TOTP mandatory fo
 
 ## Research status
 Done and audited: A+B (docs/19), C (docs/21), E+F (docs/22). Prompts for the remaining four runs (5 D+G, 6 AI/MCP, 7 features, 8 UX/visual) are in docs/23.
+
+## Added after the Part D+G audit (2026-10-22; details docs/24)
+- Verified: WCAG 2.5.8 AA 24x24 CSS px; 3.2.6 is Level A; axe finds about 57% on average; WCAG 3.0 still a Working Draft (2026-09-10); React 19.3 (2026-09-09) stable ViewTransition and Fragment Refs; Vite 8 default target Chrome/Edge 111, Firefox 114, Safari 16.4; public-repo standard runners free; WebKit quota 60% / 80% of disk; versions: vitest 5.0.5, vite-plugin-pwa 2.0.0, workbox 7.4.1, eslint 10.13.0, react-aria-components 1.22.1, oxlint 1.89.0, biome 2.6.2, web-vitals 6.2.3, typescript-eslint 8.72.0, knip 6.42.1, MCP Inspector 2.12.0, pa11y 10.0.0.
+- Our TypeScript is 7.0.2: typescript-eslint supports only TypeScript <6.1 (TS 7.0 has no programmatic API; 7.1 beta on npm since 2026-10-20), and eslint-plugin-jsx-a11y is stale (last release 2024-10-26, ESLint <=9). Lint plan = Oxlint + tsc.
+- Vercel Speed Insights free tier: Real Experience Score only, 10,000 events per rolling 30 days then collection pauses at least 14 days; no LCP/INP/CLS values.
+- Code audit: org tabs are state-backed role=tab buttons without arrow keys/tabindex/panels; no skip link, no per-route title or focus handling; control borders --line/--line2 are 1.04 to 1.62:1 (3:1 needed where a border is the only identifier); Select aria-controls points at a wrapper without the listbox role. Good already: 5 native dialogs, popups portalled into the open dialog, APG-style select-only combobox, motion setting, toast pause on hover.
+- Open: Q30 route-backed tabs, Q31 React Aria spike, Q32 devices for screen-reader tests, Q33 offline scope.
