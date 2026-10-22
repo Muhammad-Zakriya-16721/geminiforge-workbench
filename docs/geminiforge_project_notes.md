@@ -205,3 +205,8 @@ Facts to keep:
 - "Argon" = Gemini 4 Argon (model); "Argon High" as a Deep Research mode UNVERIFIED; owner to send a picker screenshot.
 - Why documents did not open: cloud app opens only files inside the working directory (/home/user/gf), scratchpad, memory; older notes lived in /home/user. Now deliverables live in /home/user/gf/docs, are pushed to GitHub and published as private Artifacts.
 Open owner actions: second-account invitation test; add GMAIL_USER/GMAIL_APP_PASSWORD in Vercel; answer Q1-Q13 in docs/11; screenshot of Gemini model picker.
+
+## ROUND 24 (2026-10-22) - Gemini Deep Research length facts and Run 1 plan review
+- Google Cloud doc (Deep Research Agent, deep-research-preview-04-2026): max input 1,048,576 tokens, max output 65,536 tokens, up to 3,000 files/prompt (API). No word limit stated for the Gemini app; app limits UNVERIFIED.
+- 65,536 tokens is roughly 40-49k English words as a ceiling (my estimate, 0.6-0.75 words/token). Observed reports (anecdotal blogs): about 10-20 pages, roughly 5-10k words. 15-25k words in one report is above typical output -> expect compression; ask for "NOT COVERED" list and continue in same chat.
+- Run 1 plan fixes: step 1 (Gemini cannot inspect live Supabase/GitHub) replace with "attached PDFs only"; remove semantic-embeddings (3c) and AI token/MCP design (4b) because Run 3 covers them; step 8 add NOT COVERED list instead of fixed word promise.
