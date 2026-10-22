@@ -22,3 +22,9 @@ Zero cost (D11). English only (D2). Custom animated dropdowns stay (D13). Share 
 
 ## Owner decisions added 2026-10-22 (do not re-ask)
 D15 project-wide share shows all NON-restricted documents. D16 TOTP mandatory for owner, org admins and project managers. D17 the repo stays public; therefore never upload unencrypted data as workflow artifacts (any signed-in GitHub user can download artifacts; default retention 90 days). D18 Gmail will be Supabase Auth custom SMTP.
+
+## Added after the Part E+F audit (2026-10-22; details docs/22)
+- Verified: Supabase pause = low activity over 7 days; restore window after a pause is 1 YEAR on the live page (the MCP docs search index still returns 90 days: stale); Edge Functions block outbound ports 25 and 587 (465 not documented), free wall-clock 150 s; Vercel Hobby cron = once a day, +-59 min; GitHub disables scheduled workflows in a public repo after 60 days without activity; Gmail app passwords need 2-Step Verification (not security-keys-only), no Advanced Protection, revoked on password change; Healthchecks Hobbyist 20 checks; UptimeRobot Free 50 monitors / 5 min; Neon Free 100 projects x 1 GB, no card; Backblaze B2 first 10 GB free; GitHub artifacts 90 days default (public max 90).
+- UNVERIFIED: B2 sign-up without card (likely, phone number probably needed), personal-Gmail daily cap, `smtp.gmail.com:465`, exact auth/storage coverage of `supabase db dump`, whether a role other than `postgres` can dump RLS tables, mail-scanner behaviour.
+- Design: ops_keepalive table read by Vercel cron + GitHub schedule; nightly dump restored in the same job, `age`-encrypted, 14-day artifact + B2; Healthchecks + UptimeRobot; quarterly Neon exit drill. Report code bugs listed in docs/22 section 3.
+- Open owner questions: Q26 dedicated Gmail, Q27 B2 sign-up, Q28 two offline copies of the age key, Q29 Healthchecks/UptimeRobot accounts.
